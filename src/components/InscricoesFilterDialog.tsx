@@ -3,14 +3,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import type { InscricoesFilters } from "@/hooks/useCompetitionDetails";
 
 interface InscricoesFilterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialFilters?: InscricoesFilters;
+  onApply: (filters: InscricoesFilters) => void;
 }
 
-export const InscricoesFilterDialog = ({ open, onOpenChange }: InscricoesFilterDialogProps) => {
+const PARTICIPACAO_TO_MIN: Record<string, number> = {
+  "1-3": 1,
+  "4-10": 4,
+  "10+": 10,
+};
+
+export const InscricoesFilterDialog = ({
+  open,
+  onOpenChange,
+  initialFilters = {},
+  onApply,
+}: InscricoesFilterDialogProps) => {
+  const [status, setStatus] = useState<string>("all");
   const [plano, setPlano] = useState<string>("");
   const [cidade, setCidade] = useState<string>("");
   const [estado, setEstado] = useState<string>("");
@@ -20,7 +35,25 @@ export const InscricoesFilterDialog = ({ open, onOpenChange }: InscricoesFilterD
   const [isParceiro, setIsParceiro] = useState<boolean>(false);
   const [naoEParceiro, setNaoEParceiro] = useState<boolean>(false);
 
+  useEffect(() => {
+    if (!open) return;
+    setStatus(initialFilters.status ?? "all");
+    setPlano(initialFilters.plano ?? "");
+    setCidade(initialFilters.cidade ?? "");
+    setEstado(initialFilters.estado ?? "");
+    setDistancia(initialFilters.distanceLabel ?? "");
+    setCustomDistancia("");
+    setParticipacao(
+      initialFilters.participacaoMin != null
+        ? Object.entries(PARTICIPACAO_TO_MIN).find(([, v]) => v === initialFilters.participacaoMin)?.[0] ?? ""
+        : ""
+    );
+    setIsParceiro(initialFilters.isParceiro ?? false);
+    setNaoEParceiro(initialFilters.naoEParceiro ?? false);
+  }, [open, initialFilters]);
+
   const handleClearFilters = () => {
+    setStatus("all");
     setPlano("");
     setCidade("");
     setEstado("");
@@ -29,10 +62,35 @@ export const InscricoesFilterDialog = ({ open, onOpenChange }: InscricoesFilterD
     setParticipacao("");
     setIsParceiro(false);
     setNaoEParceiro(false);
+    onApply({});
+    onOpenChange(false);
+  };
+
+  const buildFilters = (): InscricoesFilters => {
+    const f: InscricoesFilters = {};
+    if (status && status !== "all") {
+      f.status = status as "pending" | "confirmed" | "cancelled";
+    }
+    if (distancia) {
+      if (distancia === "outro" && customDistancia.trim()) {
+        const km = parseFloat(customDistancia.replace(",", "."));
+        if (!Number.isNaN(km)) f.distanceMeters = Math.round(km * 1000);
+      } else if (distancia !== "outro") {
+        f.distanceLabel = distancia;
+      }
+    }
+    if (isParceiro) f.isParceiro = true;
+    if (naoEParceiro) f.naoEParceiro = true;
+    const min = participacao ? PARTICIPACAO_TO_MIN[participacao] : undefined;
+    if (min != null) f.participacaoMin = min;
+    if (cidade?.trim()) f.cidade = cidade.trim();
+    if (estado?.trim()) f.estado = estado.trim();
+    if (plano?.trim()) f.plano = plano.trim();
+    return f;
   };
 
   const handleApplyFilters = () => {
-    // Implementar lógica de filtro
+    onApply(buildFilters());
     onOpenChange(false);
   };
 
@@ -44,6 +102,31 @@ export const InscricoesFilterDialog = ({ open, onOpenChange }: InscricoesFilterD
         </DialogHeader>
         
         <div className="space-y-6 py-4">
+          {/* Status da inscrição */}
+          <div>
+            <Label className="text-foreground mb-3 block">Status da inscrição</Label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: "all", label: "Todos" },
+                { value: "pending", label: "Pendente" },
+                { value: "confirmed", label: "Confirmado" },
+                { value: "cancelled", label: "Cancelado" },
+              ].map((opt) => (
+                <Button
+                  key={opt.value}
+                  onClick={() => setStatus(status === opt.value ? "all" : opt.value)}
+                  className={
+                    status === opt.value
+                      ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
+                      : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
+                  }
+                >
+                  {opt.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           {/* Plano de assinatura */}
           <div>
             <Label className="text-foreground mb-3 block">Plano de assinatura</Label>

@@ -84,6 +84,19 @@ export type RankingRow = {
   totalTimeSeconds: number;
 };
 
+/** Filtros da aba Inscrições (competição) */
+export type InscricoesFilters = {
+  status?: "pending" | "confirmed" | "cancelled" | "all";
+  distanceLabel?: string;
+  distanceMeters?: number;
+  isParceiro?: boolean;
+  naoEParceiro?: boolean;
+  participacaoMin?: number;
+  cidade?: string;
+  estado?: string;
+  plano?: string;
+};
+
 // ─── Helpers ─────────────────────────────────────────────
 
 export const formatPace = (seconds: number | null): string => {
@@ -305,10 +318,19 @@ export function useCompetitionDetails(id: string | undefined) {
 
 // ─── Hook: Competition Registrations (paginated) ─────────
 
+const LABEL_TO_METERS: Record<string, number> = {
+  "3 km": 3000,
+  "5 km": 5000,
+  "10 km": 10000,
+  "21 km": 21000,
+  "42 km": 42000,
+};
+
 export function useCompetitionRegistrations(
   competitionId: string | undefined,
   page: number = 1,
-  pageSize: number = 10
+  pageSize: number = 10,
+  filters: InscricoesFilters = {}
 ) {
   const [data, setData] = useState<RegistrationRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -324,20 +346,111 @@ export function useCompetitionRegistrations(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Fetch registrations with count
-      const {
-        data: regs,
-        error: regsError,
-        count,
-      } = await supabase
+      // Optional: restrict by user_ids (parceiro / participação)
+      let filterUserIds: string[] | null = null;
+
+      if (filters.isParceiro && !filters.naoEParceiro) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("tipo_user", "Parceiro");
+        filterUserIds = (profs ?? []).map((p) => p.id);
+        if (filterUserIds.length === 0) {
+          setData([]);
+          setTotal(0);
+          setLoading(false);
+          return;
+        }
+      } else if (filters.naoEParceiro && !filters.isParceiro) {
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id")
+          .neq("tipo_user", "Parceiro");
+        filterUserIds = (profs ?? []).map((p) => p.id);
+      }
+
+      if (filters.participacaoMin != null && filters.participacaoMin > 0) {
+        const { data: regs } = await supabase
+          .from("competition_registrations")
+          .select("user_id")
+          .neq("status", "cancelled");
+        const countByUser: Record<string, number> = {};
+        (regs ?? []).forEach((r) => {
+          countByUser[r.user_id] = (countByUser[r.user_id] ?? 0) + 1;
+        });
+        const userIdsParticipacao = Object.entries(countByUser)
+          .filter(([, c]) => c >= filters.participacaoMin!)
+          .map(([id]) => id);
+        if (userIdsParticipacao.length === 0) {
+          setData([]);
+          setTotal(0);
+          setLoading(false);
+          return;
+        }
+        filterUserIds =
+          filterUserIds === null
+            ? userIdsParticipacao
+            : filterUserIds.filter((id) => userIdsParticipacao.includes(id));
+        if (filterUserIds.length === 0) {
+          setData([]);
+          setTotal(0);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Optional: distance_ids for this competition
+      let distanceIds: string[] | null = null;
+      if (filters.distanceLabel || (filters.distanceMeters != null && filters.distanceMeters > 0)) {
+        let query = supabase
+          .from("competition_distances")
+          .select("id")
+          .eq("competition_id", competitionId);
+        if (filters.distanceLabel) {
+          const meters = LABEL_TO_METERS[filters.distanceLabel];
+          if (meters != null) {
+            query = query.eq("meters", meters);
+          } else {
+            query = query.eq("label", filters.distanceLabel!);
+          }
+        } else {
+          query = query.eq("meters", filters.distanceMeters!);
+        }
+        const { data: dists } = await query;
+        distanceIds = (dists ?? []).map((d) => d.id);
+        if (distanceIds.length === 0) {
+          setData([]);
+          setTotal(0);
+          setLoading(false);
+          return;
+        }
+      }
+
+      let query = supabase
         .from("competition_registrations")
         .select("id, user_id, distance_id, lot_id, status, created_at", {
           count: "exact",
         })
         .eq("competition_id", competitionId)
-        .neq("status", "cancelled")
-        .order("created_at", { ascending: false })
-        .range(from, to);
+        .order("created_at", { ascending: false });
+
+      if (filters.status && filters.status !== "all") {
+        query = query.eq("status", filters.status);
+      } else {
+        query = query.neq("status", "cancelled");
+      }
+      if (filterUserIds && filterUserIds.length > 0) {
+        query = query.in("user_id", filterUserIds);
+      }
+      if (distanceIds && distanceIds.length > 0) {
+        query = query.in("distance_id", distanceIds);
+      }
+
+      const {
+        data: regs,
+        error: regsError,
+        count,
+      } = await query.range(from, to);
 
       if (regsError) throw regsError;
       setTotal(count || 0);
@@ -362,16 +475,16 @@ export function useCompetitionRegistrations(
         profileMap[p.id] = p;
       });
 
-      // Fetch distances
-      const distanceIds = [
+      // Fetch distances for the fetched registrations
+      const regDistanceIds = [
         ...new Set(regs.filter((r) => r.distance_id).map((r) => r.distance_id)),
       ];
       const distanceMap: Record<string, { label: string; meters: number }> = {};
-      if (distanceIds.length > 0) {
+      if (regDistanceIds.length > 0) {
         const { data: dists } = await supabase
           .from("competition_distances")
           .select("id, label, meters")
-          .in("id", distanceIds);
+          .in("id", regDistanceIds);
         (dists || []).forEach((d) => {
           distanceMap[d.id] = d;
         });
@@ -431,7 +544,7 @@ export function useCompetitionRegistrations(
     } finally {
       setLoading(false);
     }
-  }, [competitionId, page, pageSize]);
+  }, [competitionId, page, pageSize, filters]);
 
   useEffect(() => {
     fetchRegistrations();
@@ -461,19 +574,18 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Fetch finished runs sorted by distance desc then pace asc
+      // Melhor corrida de cada corredor (view), ordenado por distância desc e pace asc
       const {
         data: runs,
         error: runsError,
         count,
       } = await supabase
-        .from("user_runs")
+        .from("competition_best_runs")
         .select(
           "id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds",
           { count: "exact" }
         )
         .eq("competition_id", competitionId)
-        .eq("state", "finished")
         .order("distance_meters", { ascending: false })
         .order("avg_pace_seconds_per_km", { ascending: true })
         .range(from, to);
@@ -641,15 +753,14 @@ export async function exportRegistrationsCsv(competitionId: string) {
   downloadCsv(csv, `inscricoes-${competitionId}.csv`);
 }
 
-/** Exports all ranking entries for a competition as CSV */
+/** Exports ranking (best run per runner) as CSV */
 export async function exportRankingCsv(competitionId: string) {
   const { data: runs, error: runsError } = await supabase
-    .from("user_runs")
+    .from("competition_best_runs")
     .select(
       "id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds"
     )
     .eq("competition_id", competitionId)
-    .eq("state", "finished")
     .order("distance_meters", { ascending: false })
     .order("avg_pace_seconds_per_km", { ascending: true });
 

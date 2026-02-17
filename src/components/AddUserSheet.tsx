@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSION_GROUPS, getPermissionLabel, type PermissionKey } from "@/lib/permissions";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -24,6 +25,7 @@ interface AddUserSheetProps {
 }
 
 export const AddUserSheet = ({ open, onOpenChange, onSuccess }: AddUserSheetProps) => {
+  const { session } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [permissionKeys, setPermissionKeys] = useState<string[]>([]);
@@ -50,11 +52,17 @@ export const AddUserSheet = ({ open, onOpenChange, onSuccess }: AddUserSheetProp
           full_name: name.trim() || undefined,
           permission_keys: permissionKeys,
         },
+        headers:
+          session?.access_token != null
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : undefined,
       });
 
+      // Prefer error message from Edge Function body (e.g. "E-mail já convidado")
+      const bodyError = (data as { error?: string; message?: string })?.error
+        ?? (data as { error?: string; message?: string })?.message;
+      if (bodyError) throw new Error(bodyError);
       if (error) throw error;
-      const errMsg = (data as { error?: string })?.error;
-      if (errMsg) throw new Error(errMsg);
 
       toast.success("Convite enviado! O usuário receberá um e-mail para definir a senha.");
       setName("");

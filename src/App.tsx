@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AdminGuard } from "@/components/AdminGuard";
+import { CorredorGuard } from "@/components/CorredorGuard";
 import Parceiros from "./pages/Parceiros";
 import ParceiroDetalhes from "./pages/ParceiroDetalhes";
 import Financeiro from "./pages/Financeiro";
@@ -18,6 +19,9 @@ import CadastrarCampeonatoForm from "./pages/CadastrarCampeonatoForm";
 import Login from "./pages/Login";
 import PasswordRecovery from "./pages/PasswordRecovery";
 import MinhaConta from "./pages/MinhaConta";
+import PlanoSelecao from "./pages/PlanoSelecao";
+import Checkout from "./pages/Checkout";
+import PagamentoConfirmado from "./pages/PagamentoConfirmado";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,6 +37,13 @@ const App = () => (
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/recuperacao-senha" element={<PasswordRecovery />} />
+          {/* Rotas do corredor */}
+          <Route element={<CorredorGuard />}>
+            <Route path="/corredor/planos" element={<PlanoSelecao />} />
+            <Route path="/corredor/checkout" element={<Checkout />} />
+            <Route path="/corredor/pagamento-confirmado" element={<PagamentoConfirmado />} />
+          </Route>
+          {/* Rotas do admin */}
           <Route element={<AdminGuard />}>
             <Route path="/parceiros" element={<Parceiros />} />
             <Route path="/parceiros/:id" element={<ParceiroDetalhes />} />
@@ -40,10 +51,10 @@ const App = () => (
             <Route path="/corredores" element={<Corredores />} />
             <Route path="/corredores/:id" element={<CorredorDetalhes />} />
             <Route path="/gestao-competicoes" element={<GestaoCompeticoes />} />
-            <Route path="/gestao-competicoes/:id" element={<CompeticaoDetalhes />} />
-            <Route path="/gestao-competicoes/:id/editar" element={<EditarCompeticao />} />
             <Route path="/gestao-competicoes/cadastrar-competicao" element={<CadastrarCampeonato />} />
             <Route path="/gestao-competicoes/cadastrar-campeonato" element={<CadastrarCampeonatoForm />} />
+            <Route path="/gestao-competicoes/:id" element={<CompeticaoDetalhes />} />
+            <Route path="/gestao-competicoes/:id/editar" element={<EditarCompeticao />} />
             <Route path="/minha-conta" element={<MinhaConta />} />
           </Route>
           <Route path="*" element={<NotFound />} />

@@ -11,7 +11,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowLeft, Upload, Check, CalendarIcon } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -61,16 +61,23 @@ function formatValorMask(raw: string): string {
   return "R$ " + reais.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+type ChampionshipOption = { id: string; name: string };
+
 const CadastrarCampeonato = () => {
   const navigate = useNavigate();
   const [bannerImage, setBannerImage] = useState<string | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [miniBannerImage, setMiniBannerImage] = useState<string | null>(null);
+  const [championships, setChampionships] = useState<ChampionshipOption[]>([]);
+  const [championshipsLoading, setChampionshipsLoading] = useState(true);
   const [selectedDistances, setSelectedDistances] = useState<string[]>([]);
   const [outraDistancia, setOutraDistancia] = useState<string>("");
   const [tentativasIlimitadas, setTentativasIlimitadas] = useState(true);
   const [limiteInscritos, setLimiteInscritos] = useState(false);
+  const [maxInscritos, setMaxInscritos] = useState<string>("");
   const [temPremiacoes, setTemPremiacoes] = useState<string>("sim");
   const [quantidadePremiacoes, setQuantidadePremiacoes] = useState<string>("");
+  const [outraQuantidadePremiacoes, setOutraQuantidadePremiacoes] = useState<string>("");
   const [lotes, setLotes] = useState<
     { id: number; nome: string; valor: string; descricao: string; permitirCreditos: boolean; possuiKit: "sim" | "nao" }[]
   >([
@@ -99,6 +106,7 @@ const CadastrarCampeonato = () => {
   const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setBannerFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setBannerImage(reader.result as string);
@@ -106,6 +114,19 @@ const CadastrarCampeonato = () => {
       reader.readAsDataURL(file);
     }
   };
+
+  useEffect(() => {
+    (async () => {
+      setChampionshipsLoading(true);
+      const { data, error } = await supabase.from("championships").select("id, name").order("name");
+      if (error) {
+        console.error("Erro ao carregar campeonatos:", error);
+        toast({ title: "Não foi possível carregar os campeonatos", variant: "destructive" });
+      }
+      setChampionships((data ?? []) as ChampionshipOption[]);
+      setChampionshipsLoading(false);
+    })();
+  }, []);
 
   const handleMiniBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -146,6 +167,13 @@ const CadastrarCampeonato = () => {
       toast({ title: "Nome é obrigatório", variant: "destructive" });
       return;
     }
+    const hasDistance =
+      selectedDistances.some((d) => d !== "outro" && DISTANCE_METERS[d]) ||
+      (selectedDistances.includes("outro") && outraDistancia.trim() && !Number.isNaN(parseFloat(outraDistancia.replace(",", "."))));
+    if (!hasDistance) {
+      toast({ title: "Selecione ao menos uma distância", variant: "destructive" });
+      return;
+    }
     setIsSubmitting(true);
     try {
       const startsAt = data.competicaoInicio
@@ -156,6 +184,18 @@ const CadastrarCampeonato = () => {
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
       const regEnd = data.inscricaoFim?.toISOString() ?? null;
       const isFree = data.tipoCompeticao === "gratuita" || lotes.every((l) => parseValorToCents(l.valor) === 0);
+      const championshipId =
+        data.campeonato && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
+      const prizeText =
+        temPremiacoes === "sim"
+          ? quantidadePremiacoes === "outro"
+            ? `${outraQuantidadePremiacoes || ""} premiados`.trim() || null
+            : `${quantidadePremiacoes || ""} premiados`.trim() || null
+          : null;
+      const maxRegistrations =
+        limiteInscritos && maxInscritos.trim()
+          ? parseInt(maxInscritos, 10) || null
+          : null;
 
       const { data: comp, error: compError } = await supabase
         .from("competitions")
@@ -171,14 +211,27 @@ const CadastrarCampeonato = () => {
           is_free: isFree,
           cover_image_url: null,
           description: data.descricao?.trim() || null,
-          prize_description: temPremiacoes === "sim" ? `${quantidadePremiacoes || ""} premiados` : null,
+          prize_description: prizeText || null,
           competition_sponsors: null,
+          championship_id: championshipId,
+          unlimited_attempts: tentativasIlimitadas,
+          max_registrations: maxRegistrations,
         })
         .select("id")
         .single();
 
       if (compError) throw compError;
       const competitionId = comp.id;
+
+      if (bannerFile) {
+        const ext = bannerFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `competitions/${competitionId}/cover.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("sistema").upload(path, bannerFile, { upsert: true });
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
+          await supabase.from("competitions").update({ cover_image_url: urlData.publicUrl }).eq("id", competitionId);
+        }
+      }
 
       const distanceRows: { competition_id: string; label: string; meters: number; sort_order: number }[] = [];
       selectedDistances.forEach((d, i) => {
@@ -412,17 +465,37 @@ const CadastrarCampeonato = () => {
               {/* Vincular campeonato */}
               <div>
                 <Label htmlFor="campeonato" className="text-foreground">
-                  Vincular campeonato
+                  Vincular campeonato <span className="text-muted-foreground">(opcional)</span>
                 </Label>
-                <Select onValueChange={(value) => setValue("campeonato", value)}>
+                <Select
+                  value={watch("campeonato") ?? ""}
+                  onValueChange={(value) => setValue("campeonato", value)}
+                  disabled={championshipsLoading}
+                >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Selecione o campeonato a ser vinculado" />
+                    <SelectValue
+                      placeholder={
+                        championshipsLoading
+                          ? "Carregando..."
+                          : championships.length === 0
+                            ? "Nenhum campeonato cadastrado"
+                            : "Selecione o campeonato a ser vinculado"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="campeonato1">Campeonato 1</SelectItem>
-                    <SelectItem value="campeonato2">Campeonato 2</SelectItem>
+                    {championships.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {!championshipsLoading && championships.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Cadastre campeonatos na aba &quot;Campeonatos&quot; da Gestão de competições para vinculá-los aqui.
+                  </p>
+                )}
               </div>
 
               {/* Distâncias permitidas */}
@@ -630,6 +703,9 @@ const CadastrarCampeonato = () => {
                     type="number"
                     placeholder="Ex: 100"
                     className="mt-2"
+                    value={maxInscritos}
+                    onChange={(e) => setMaxInscritos(e.target.value)}
+                    min={1}
                   />
                 )}
               </div>
@@ -703,7 +779,9 @@ const CadastrarCampeonato = () => {
                     <Input
                       placeholder="Insira outra quantidade"
                       className="mt-3"
-                      type="number"
+                      type="text"
+                      value={outraQuantidadePremiacoes}
+                      onChange={(e) => setOutraQuantidadePremiacoes(e.target.value)}
                     />
                   )}
                 </div>

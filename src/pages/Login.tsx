@@ -9,27 +9,37 @@ import { useAuth } from "@/contexts/AuthContext";
 import logo from "@/assets/runlab-logo.png";
 import heroImage from "@/assets/login-hero.png";
 
+const TIPO_USER_CORREDOR = "Corredor";
+
 const Login = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, profile, profileLoading, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showLoginSuccess, setShowLoginSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Redireciona para /financeiro se já estiver logado
+  // Redireciona baseado no tipo de usuário
   useEffect(() => {
-    if (!loading && user) {
-      navigate("/financeiro", { replace: true });
+    if (!loading && !profileLoading && user && profile) {
+      if (profile.tipo_user === TIPO_USER_CORREDOR) {
+        navigate("/corredor/planos", { replace: true });
+      } else {
+        navigate("/financeiro", { replace: true });
+      }
     }
-  }, [user, loading, navigate]);
+  }, [user, profile, profileLoading, loading, navigate]);
 
   useEffect(() => {
-    if (!showLoginSuccess) return;
-    const t = setTimeout(() => navigate("/financeiro"), 1200);
+    if (!showLoginSuccess || profileLoading || !profile) return;
+    const destination =
+      profile.tipo_user === TIPO_USER_CORREDOR
+        ? "/corredor/planos"
+        : "/financeiro";
+    const t = setTimeout(() => navigate(destination), 1200);
     return () => clearTimeout(t);
-  }, [showLoginSuccess, navigate]);
+  }, [showLoginSuccess, profile, profileLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

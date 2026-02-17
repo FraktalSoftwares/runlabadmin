@@ -25,7 +25,7 @@ import {
   exportRegistrationsCsv,
   exportRankingCsv,
 } from "@/hooks/useCompetitionDetails";
-import type { CompetitionDetail } from "@/hooks/useCompetitionDetails";
+import type { CompetitionDetail, InscricoesFilters } from "@/hooks/useCompetitionDetails";
 import { toast } from "sonner";
 import competitionHero from "@/assets/competition-hero.png";
 
@@ -309,25 +309,50 @@ const DetalhesTab = ({ competition }: { competition: CompetitionDetail }) => {
 
 // ─── Tab: Inscrições ─────────────────────────────────────
 
-const InscricoesTab = ({ competitionId }: { competitionId: string }) => {
-  const [page, setPage] = useState(1);
+const InscricoesTab = ({
+  competitionId,
+  filters,
+  page,
+  onPageChange,
+}: {
+  competitionId: string;
+  filters: InscricoesFilters;
+  page: number;
+  onPageChange: (page: number) => void;
+}) => {
   const pageSize = 10;
   const { data, total, loading, error, refetch } = useCompetitionRegistrations(
     competitionId,
     page,
-    pageSize
+    pageSize,
+    filters
   );
+
+  const hasActiveFilters = Object.keys(filters).length > 0;
 
   if (loading && data.length === 0) return <LoadingState />;
   if (error) return <ErrorState message={error.message} onRetry={refetch} />;
-  if (data.length === 0) return <EmptyState message="Nenhuma inscrição encontrada." />;
+  if (data.length === 0) {
+    return (
+      <EmptyState
+        message={
+          hasActiveFilters
+            ? "Nenhuma inscrição encontrada com os filtros aplicados."
+            : "Nenhuma inscrição encontrada."
+        }
+      />
+    );
+  }
 
   return (
     <>
       <div className="rounded-lg overflow-hidden border border-border mb-6">
         <div className="px-6 py-4 bg-[#262626] flex items-center justify-between">
           <h2 className="text-xl font-semibold text-foreground">Inscritos</h2>
-          <p className="text-sm text-muted-foreground">{total} inscritos</p>
+          <p className="text-sm text-muted-foreground">
+            {total} inscrito{total !== 1 ? "s" : ""}
+            {hasActiveFilters && " (filtrado)"}
+          </p>
         </div>
         <Table>
           <TableHeader>
@@ -397,7 +422,7 @@ const InscricoesTab = ({ competitionId }: { competitionId: string }) => {
         total={total}
         page={page}
         pageSize={pageSize}
-        onPageChange={setPage}
+        onPageChange={onPageChange}
       />
     </>
   );
@@ -501,6 +526,8 @@ const CompeticaoDetalhesContent = () => {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [inscricoesFilters, setInscricoesFilters] = useState<InscricoesFilters>({});
+  const [inscricoesPage, setInscricoesPage] = useState(1);
 
   const { data: competition, loading, error, refetch } = useCompetitionDetails(id);
 
@@ -625,7 +652,14 @@ const CompeticaoDetalhesContent = () => {
 
       {/* Tab Content */}
       {activeTab === "detalhes" && <DetalhesTab competition={competition} />}
-      {activeTab === "inscricoes" && <InscricoesTab competitionId={competition.id} />}
+      {activeTab === "inscricoes" && (
+        <InscricoesTab
+          competitionId={competition.id}
+          filters={inscricoesFilters}
+          page={inscricoesPage}
+          onPageChange={setInscricoesPage}
+        />
+      )}
       {activeTab === "ranking" && <RankingTab competitionId={competition.id} />}
 
       {/* Dialogs */}
@@ -638,6 +672,11 @@ const CompeticaoDetalhesContent = () => {
       <InscricoesFilterDialog
         open={isFilterDialogOpen}
         onOpenChange={setIsFilterDialogOpen}
+        initialFilters={inscricoesFilters}
+        onApply={(f) => {
+          setInscricoesFilters(f);
+          setInscricoesPage(1);
+        }}
       />
     </main>
   );

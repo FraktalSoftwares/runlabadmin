@@ -151,15 +151,20 @@ export default function CadastrarCampeonatoForm() {
         awardTypes.push(outroAwardType.trim());
       }
 
+      const stagesCount = data.stages_count
+        ? Math.max(0, parseInt(data.stages_count, 10) || 0)
+        : 0;
+      const medalistsCount = data.medalists_count
+        ? Math.max(0, parseInt(data.medalists_count, 10) || 0)
+        : 0;
+
       const { data: champ, error: champError } = await supabase
         .from("championships")
         .insert({
           name: data.name.trim(),
           short_name: data.short_name?.trim() || null,
-          stages_count: data.stages_count ? parseInt(data.stages_count) : 0,
-          medalists_count: data.medalists_count
-            ? parseInt(data.medalists_count)
-            : 0,
+          stages_count: stagesCount,
+          medalists_count: medalistsCount,
           period_start: data.period_start
             ? format(data.period_start, "yyyy-MM-dd")
             : null,
@@ -185,12 +190,15 @@ export default function CadastrarCampeonatoForm() {
 
       if (champError) throw champError;
 
-      /* Link selected competitions */
-      if (selectedCompetitions.length > 0 && champ) {
+      /* Link selected competitions (apenas IDs válidos de competições, exclui "outro") */
+      const validCompetitionIds = selectedCompetitions.filter(
+        (id) => id !== "outro" && competitions.some((c) => c.id === id)
+      );
+      if (validCompetitionIds.length > 0 && champ) {
         const { error: linkError } = await supabase
           .from("competitions")
           .update({ championship_id: champ.id })
-          .in("id", selectedCompetitions);
+          .in("id", validCompetitionIds);
         if (linkError) throw linkError;
       }
 
@@ -202,10 +210,16 @@ export default function CadastrarCampeonatoForm() {
         duration: 3000,
       });
       navigate("/gestao-competicoes");
-    } catch (e) {
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : typeof (e as { message?: string })?.message === "string"
+            ? (e as { message: string }).message
+            : "Erro desconhecido ao salvar.";
       toast({
         title: "Erro ao salvar campeonato",
-        description: e instanceof Error ? e.message : undefined,
+        description: message,
         variant: "destructive",
       });
     } finally {

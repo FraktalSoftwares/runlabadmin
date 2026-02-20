@@ -12,12 +12,13 @@ interface CorredoresFilterDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function participacaoToMin(value: string): number | undefined {
+function participacaoToMin(value: string, customValue?: number): number | undefined {
   switch (value) {
     case "nenhuma": return 0;
     case "1-3": return 1;
     case "4-10": return 4;
     case "10+": return 10;
+    case "outro": return customValue != null && customValue >= 0 ? customValue : undefined;
     default: return undefined;
   }
 }
@@ -30,30 +31,71 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
   const [distancia, setDistancia] = useState<string>("");
   const [customDistancia, setCustomDistancia] = useState("");
   const [participacao, setParticipacao] = useState<string>("");
+  const [customParticipacao, setCustomParticipacao] = useState<string>("");
   const [eParceiro, setEParceiro] = useState(false);
   const [naoEParceiro, setNaoEParceiro] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
-      setPlano("");
-      setCidade("");
-      setEstado("");
-      setDistancia("");
-      setCustomDistancia("");
-      setParticipacao("");
+      setPlano(
+        filters.plano === "Gratuito" ? "gratuito" : filters.plano === "ComCreditos" ? "com_creditos" : ""
+      );
+      setCidade(filters.cidade ?? "");
+      setEstado(filters.estado ?? "");
+      setDistancia(
+        filters.preferredDistance
+          ? ["3km", "5km", "10km", "21km", "42km"].includes(filters.preferredDistance)
+            ? filters.preferredDistance
+            : "outro"
+          : ""
+      );
+      setCustomDistancia(
+        filters.preferredDistance && !["3km", "5km", "10km", "21km", "42km"].includes(filters.preferredDistance)
+          ? filters.preferredDistance
+          : ""
+      );
+      const pMin = filters.participacaoMin;
+      if (pMin == null) setParticipacao("");
+      else if (pMin === 0) setParticipacao("nenhuma");
+      else if (pMin === 1) setParticipacao("1-3");
+      else if (pMin === 4) setParticipacao("4-10");
+      else if (pMin === 10) setParticipacao("10+");
+      else {
+        setParticipacao("outro");
+        setCustomParticipacao(String(pMin));
+      }
       setEParceiro(filters.eParceiro ?? false);
       setNaoEParceiro(filters.naoEParceiro ?? false);
     }
-  }, [open, filters.eParceiro, filters.naoEParceiro]);
+  }, [
+    open,
+    filters.plano,
+    filters.cidade,
+    filters.estado,
+    filters.preferredDistance,
+    filters.participacaoMin,
+    filters.eParceiro,
+    filters.naoEParceiro,
+  ]);
 
   const handleApplyFilters = () => {
+    const planoValue = plano === "gratuito" ? "Gratuito" : plano === "com_creditos" ? "ComCreditos" : undefined;
+    const participacaoMinValue = participacao
+      ? participacaoToMin(
+          participacao,
+          participacao === "outro" ? parseInt(customParticipacao, 10) : undefined
+        )
+      : undefined;
     const newFilters: CorredorFilters = {
       ...filters,
+      plano: planoValue,
+      cidade: cidade?.trim() || undefined,
+      estado: estado?.trim() || undefined,
       eParceiro: eParceiro ? true : undefined,
       naoEParceiro: naoEParceiro ? true : undefined,
-      preferredDistance: distancia ? (distancia === "outro" ? customDistancia || undefined : distancia) : undefined,
-      participacaoMin: participacao ? participacaoToMin(participacao) : undefined,
+      preferredDistance: distancia ? (distancia === "outro" ? customDistancia?.trim() || undefined : distancia) : undefined,
+      participacaoMin: participacaoMinValue,
     };
     setFilters(newFilters);
     toast({
@@ -70,6 +112,7 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
     setDistancia("");
     setCustomDistancia("");
     setParticipacao("");
+    setCustomParticipacao("");
     setEParceiro(false);
     setNaoEParceiro(false);
     clearFilters();
@@ -87,13 +130,13 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-          {/* Plano de assinatura */}
+          {/* Plano: Gratuito ou com créditos */}
           <div>
-            <h3 className="text-sm font-medium text-foreground mb-3">Plano de assinatura</h3>
+            <h3 className="text-sm font-medium text-foreground mb-3">Plano</h3>
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="ghost"
-                onClick={() => setPlano("gratuito")}
+                onClick={() => setPlano(plano === "gratuito" ? "" : "gratuito")}
                 className={`${
                   plano === "gratuito"
                     ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
@@ -104,25 +147,14 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => setPlano("essencial")}
+                onClick={() => setPlano(plano === "com_creditos" ? "" : "com_creditos")}
                 className={`${
-                  plano === "essencial"
+                  plano === "com_creditos"
                     ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
                     : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
                 }`}
               >
-                Essencial
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => setPlano("plus")}
-                className={`${
-                  plano === "plus"
-                    ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
-                    : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
-                }`}
-              >
-                Plus
+                Com créditos
               </Button>
             </div>
           </div>
@@ -290,6 +322,16 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
                 Outro
               </Button>
             </div>
+            {participacao === "outro" && (
+              <Input
+                type="number"
+                min={0}
+                placeholder="Mín. de inscrições (ex: 15)"
+                value={customParticipacao}
+                onChange={(e) => setCustomParticipacao(e.target.value)}
+                className="mt-2 bg-[#2A2A2A] border-0 text-foreground placeholder:text-muted-foreground"
+              />
+            )}
           </div>
 
           {/* Tipo de parceiro */}

@@ -125,6 +125,7 @@ const Checkout = () => {
               amount: currentPlan?.price,
               planName: currentPlan?.name,
               planType: currentPlan?.type === "anual" ? "Assinatura" : "Avulso",
+              creditsAmount: currentPlan?.credits_amount,
             },
           });
           return;
@@ -304,6 +305,7 @@ const Checkout = () => {
             amount: currentPlan.price,
             planName: currentPlan.name,
             planType: currentPlan.type === "anual" ? "Assinatura" : "Avulso",
+            creditsAmount: data.creditsAmount || currentPlan.credits_amount,
           },
         });
       } else if (data.status === "PENDING" || data.status === "AWAITING_RISK_ANALYSIS") {

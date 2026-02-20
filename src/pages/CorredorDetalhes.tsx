@@ -2,14 +2,51 @@ import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useParams, Link } from "react-router-dom";
-import { ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronRight, ChevronLeft, Loader2, Ticket } from "lucide-react";
 import nivelIcon from "@/assets/nivel-icon.png";
 import { Button } from "@/components/ui/button";
 import { useCorredorDetails } from "@/hooks/useCorredorDetails";
 
+function formatPrice(value: number): string {
+  return `R$ ${value.toFixed(2).replace(".", ",")}`;
+}
+
+function formatDateTime(d: string | null): string {
+  if (!d) return "—";
+  const date = new Date(d);
+  return (
+    date.toLocaleDateString("pt-BR") +
+    " " +
+    date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+  );
+}
+
+function formatDateOnly(d: string | null): string {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("pt-BR");
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pendente",
+  CONFIRMED: "Paga",
+  RECEIVED: "Recebida",
+  OVERDUE: "Vencida",
+  REFUNDED: "Reembolsada",
+  FAILED: "Falhou",
+  CANCELLED: "Cancelada",
+};
+
+const CREDIT_TYPE_LABELS: Record<string, string> = {
+  purchase: "Compra",
+  usage: "Uso em desafio",
+  refund: "Reembolso",
+  expiration: "Expiração",
+  admin_adjustment: "Ajuste admin",
+};
+
 const CorredorDetalhes = () => {
   const { id } = useParams();
-  const { data: corredor, loading, error, refetch } = useCorredorDetails(id);
+  const { data: corredor, loading, error } = useCorredorDetails(id);
 
   if (loading) {
     return (
@@ -41,8 +78,9 @@ const CorredorDetalhes = () => {
     );
   }
 
-  const planosAtivos: { nome: string; vigencia: string; valor: string; pagamento: string }[] = [];
-  const transacoes: { tipo: string; formaPagamento: string; parcelas: string; dataVencimento: string; dataPagamento: string; valor: string; status: string }[] = [];
+  const confirmedPayments = corredor.payments.filter(
+    (p) => p.status === "CONFIRMED" || p.status === "RECEIVED"
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -147,9 +185,21 @@ const CorredorDetalhes = () => {
           </Card>
         </div>
 
+        {/* Saldo de Créditos */}
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Histórico de participação em competições</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">Saldo de créditos</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="bg-[#2a2a2a] border-0">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-8 h-8 rounded-full bg-[#CCF725]/20 flex items-center justify-center">
+                    <Ticket className="w-4 h-4 text-[#CCF725]" />
+                  </div>
+                  <p className="text-xs text-muted-foreground">Créditos disponíveis</p>
+                </div>
+                <p className="text-3xl font-bold text-[#CCF725]">{corredor.creditBalance}</p>
+              </CardContent>
+            </Card>
             <Card className="bg-[#2a2a2a] border-0">
               <CardContent className="p-6">
                 <p className="text-xs text-muted-foreground mb-2">Nº de provas concluídas</p>
@@ -158,49 +208,50 @@ const CorredorDetalhes = () => {
             </Card>
             <Card className="bg-[#2a2a2a] border-0">
               <CardContent className="p-6">
-                <p className="text-xs text-muted-foreground mb-2">Nº de assinaturas em provas</p>
+                <p className="text-xs text-muted-foreground mb-2">Nº de inscrições em provas</p>
                 <p className="text-3xl font-bold text-foreground">{corredor.stats.assinaturas}</p>
-              </CardContent>
-            </Card>
-            <Card className="bg-[#2a2a2a] border-0">
-              <CardContent className="p-6">
-                <p className="text-xs text-muted-foreground mb-2">Ranking anual</p>
-                <p className="text-3xl font-bold text-foreground">{corredor.stats.distancia}</p>
               </CardContent>
             </Card>
           </div>
         </div>
 
+        {/* Histórico de Créditos */}
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Planos contratados</h2>
+          <h2 className="text-xl font-semibold text-foreground mb-4">Histórico de créditos</h2>
           <Card className="bg-card border-0 rounded-lg overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-table-header">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Nome</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Vigência</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Valor pago</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Forma de pagamento</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Data</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Tipo</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Descrição</th>
+                    <th className="px-6 py-3 text-right text-sm font-medium" style={{ color: "#E0E0E0" }}>Créditos</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {planosAtivos.length === 0 ? (
+                  {corredor.creditTransactions.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground text-sm">
-                        Nenhum plano contratado.
+                        Nenhuma movimentação de créditos.
                       </td>
                     </tr>
                   ) : (
-                    planosAtivos.map((plano, index) => (
+                    corredor.creditTransactions.map((ct, index) => (
                       <tr
-                        key={index}
+                        key={ct.id}
                         className={`border-t border-border ${index % 2 === 0 ? "bg-table-row" : ""}`}
                       >
-                        <td className="px-6 py-4 text-sm text-foreground">{plano.nome}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{plano.vigencia}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{plano.valor}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{plano.pagamento}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{formatDateTime(ct.created_at)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          {CREDIT_TYPE_LABELS[ct.type] || ct.type}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-foreground">{ct.description || "—"}</td>
+                        <td className="px-6 py-4 text-sm text-right font-medium">
+                          <span className={ct.amount > 0 ? "text-green-400" : "text-red-400"}>
+                            {ct.amount > 0 ? "+" : ""}{ct.amount}
+                          </span>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -210,6 +261,51 @@ const CorredorDetalhes = () => {
           </Card>
         </div>
 
+        {/* Planos contratados */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Planos contratados</h2>
+          <Card className="bg-card border-0 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-table-header">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Nome</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Tipo</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Valor pago</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Forma de pagamento</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {confirmedPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                        Nenhum plano contratado.
+                      </td>
+                    </tr>
+                  ) : (
+                    confirmedPayments.map((payment, index) => (
+                      <tr
+                        key={payment.id}
+                        className={`border-t border-border ${index % 2 === 0 ? "bg-table-row" : ""}`}
+                      >
+                        <td className="px-6 py-4 text-sm text-foreground">{payment.plan_name}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          {payment.plan_type === "anual" ? "Assinatura" : "Avulso"}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-foreground">{formatPrice(payment.amount)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{payment.billing_type}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{formatDateOnly(payment.paid_at)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+
+        {/* Cobranças realizadas */}
         <div>
           <h2 className="text-xl font-semibold text-foreground mb-4">Cobranças realizadas</h2>
           <Card className="bg-card border-0 rounded-lg overflow-hidden">
@@ -217,36 +313,46 @@ const CorredorDetalhes = () => {
               <table className="w-full">
                 <thead className="bg-table-header">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Tipo de pagamento</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Plano</th>
                     <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Forma de pagamento</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Nº de parcelas</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Data de vencimento</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Data de pagamento</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Valor da fatura</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Parcelas</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Data</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Data pgto.</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Valor</th>
                     <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: "#E0E0E0" }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {transacoes.length === 0 ? (
+                  {corredor.payments.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground text-sm">
                         Nenhuma cobrança registrada.
                       </td>
                     </tr>
                   ) : (
-                    transacoes.map((transacao, index) => (
+                    corredor.payments.map((payment, index) => (
                       <tr
-                        key={index}
+                        key={payment.id}
                         className={`border-t border-border ${index % 2 === 0 ? "bg-table-row" : ""}`}
                       >
-                        <td className="px-6 py-4 text-sm text-foreground">{transacao.tipo}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{transacao.formaPagamento}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{transacao.parcelas}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{transacao.dataVencimento}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{transacao.dataPagamento}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{transacao.valor}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{payment.plan_name}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{payment.billing_type}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{payment.installment_count || 1}x</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{formatDateOnly(payment.created_at)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{formatDateOnly(payment.paid_at)}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{formatPrice(payment.amount)}</td>
                         <td className="px-6 py-4">
-                          <Badge variant={transacao.status === "Paga" ? "success" : "destructive"}>{transacao.status}</Badge>
+                          <Badge
+                            variant={
+                              payment.status === "CONFIRMED" || payment.status === "RECEIVED"
+                                ? "success"
+                                : payment.status === "PENDING"
+                                  ? "default"
+                                  : "destructive"
+                            }
+                          >
+                            {STATUS_LABELS[payment.status] || payment.status}
+                          </Badge>
                         </td>
                       </tr>
                     ))

@@ -15,7 +15,16 @@ function CorredoresContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [filters.search, filters.eParceiro, filters.naoEParceiro, filters.preferredDistance, filters.participacaoMin]);
+  }, [
+    filters.search,
+    filters.eParceiro,
+    filters.naoEParceiro,
+    filters.preferredDistance,
+    filters.participacaoMin,
+    filters.plano,
+    filters.cidade,
+    filters.estado,
+  ]);
 
   return (
     <div className="min-h-screen bg-background">

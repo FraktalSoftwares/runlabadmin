@@ -12,11 +12,9 @@ import { Loader2 } from "lucide-react";
 import type { CorredorRow } from "@/hooks/useCorredores";
 
 const getPlanoBadge = (plano: string) => {
-  const p = plano?.toLowerCase() ?? "";
-  if (p === "gratuito") return <Badge className="bg-success/20 text-success-foreground hover:bg-success/20">Gratuito</Badge>;
-  if (p === "plus") return <Badge className="bg-purple-500/20 text-purple-400 hover:bg-purple-500/20">Plus</Badge>;
-  if (p === "essencial") return <Badge className="bg-blue-500/20 text-blue-400 hover:bg-blue-500/20">Essencial</Badge>;
-  return <Badge variant="secondary">{plano || "—"}</Badge>;
+  const p = plano?.trim() ?? "";
+  if (p === "Gratuito" || p === "") return <Badge className="bg-success/20 text-success-foreground hover:bg-success/20">Gratuito</Badge>;
+  return <Badge variant="secondary">{p} crédito{p === "1" ? "" : "s"}</Badge>;
 };
 
 type CorredoresTableProps = {

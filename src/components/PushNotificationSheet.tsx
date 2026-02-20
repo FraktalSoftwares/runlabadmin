@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -14,51 +13,102 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { Loader2 } from "lucide-react";
 
 interface PushNotificationSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+/** Converte DD/MM/AAAA e HH:MM para ISO (assume timezone local) */
+function toScheduledAt(dateStr: string, timeStr: string): string | null {
+  const d = dateStr.replace(/\D/g, "");
+  const t = timeStr.replace(/\D/g, "");
+  if (d.length !== 8 || t.length !== 4) return null;
+  const day = d.slice(0, 2);
+  const month = d.slice(2, 4);
+  const year = d.slice(4, 8);
+  const hour = t.slice(0, 2);
+  const minute = t.slice(2, 4);
+  const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:00`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 export const PushNotificationSheet = ({ open, onOpenChange }: PushNotificationSheetProps) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [sendType, setSendType] = useState("immediate");
+  const [sendType, setSendType] = useState<"immediate" | "scheduled">("immediate");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const formatDate = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
+    const numbers = value.replace(/\D/g, "");
     if (numbers.length <= 2) return numbers;
     if (numbers.length <= 4) return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
     return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4, 8)}`;
   };
 
   const formatTime = (value: string) => {
-    const numbers = value.replace(/\D/g, '');
+    const numbers = value.replace(/\D/g, "");
     if (numbers.length <= 2) return numbers;
     return `${numbers.slice(0, 2)}:${numbers.slice(2, 4)}`;
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatDate(e.target.value);
-    setDate(formatted);
+    setDate(formatDate(e.target.value));
   };
 
   const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatTime(e.target.value);
-    setTime(formatted);
+    setTime(formatTime(e.target.value));
   };
 
-  const handleSubmit = () => {
-    toast.success("Notificação agendada com sucesso!");
-    onOpenChange(false);
-    // Reset form
+  const resetForm = () => {
     setTitle("");
     setDescription("");
     setSendType("immediate");
     setDate("");
     setTime("");
+  };
+
+  const handleSubmit = async () => {
+    const titleTrim = title.trim();
+    if (!titleTrim) {
+      toast.error("Preencha o título da notificação.");
+      return;
+    }
+
+    const scheduled_at = sendType === "scheduled" ? toScheduledAt(date, time) : null;
+    if (sendType === "scheduled" && !scheduled_at) {
+      toast.error("Preencha data e hora válidas para o envio agendado (DD/MM/AAAA e HH:MM).");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("notification_queue").insert({
+        title: titleTrim,
+        description: description.trim() || null,
+        send_type: sendType,
+        scheduled_at,
+      });
+
+      if (error) throw error;
+
+      toast.success(
+        sendType === "immediate"
+          ? "Notificação na fila. Será enviada a todos os corredores em breve."
+          : "Notificação agendada. Será enviada a todos os corredores na data e hora escolhidas."
+      );
+      onOpenChange(false);
+      resetForm();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Erro ao criar notificação.";
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -130,36 +180,38 @@ export const PushNotificationSheet = ({ open, onOpenChange }: PushNotificationSh
             </RadioGroup>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="date" className="text-sm text-foreground">
-                Data
-              </Label>
-              <Input
-                id="date"
-                type="text"
-                placeholder="DD/MM/AAAA"
-                value={date}
-                onChange={handleDateChange}
-                maxLength={10}
-                className="bg-[#1A1A1A] border-0 text-foreground"
-              />
+          {sendType === "scheduled" && (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="date" className="text-sm text-foreground">
+                  Data
+                </Label>
+                <Input
+                  id="date"
+                  type="text"
+                  placeholder="DD/MM/AAAA"
+                  value={date}
+                  onChange={handleDateChange}
+                  maxLength={10}
+                  className="bg-[#1A1A1A] border-0 text-foreground"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="time" className="text-sm text-foreground">
+                  Hora
+                </Label>
+                <Input
+                  id="time"
+                  type="text"
+                  placeholder="HH:MM"
+                  value={time}
+                  onChange={handleTimeChange}
+                  maxLength={5}
+                  className="bg-[#1A1A1A] border-0 text-foreground"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="time" className="text-sm text-foreground">
-                Hora
-              </Label>
-              <Input
-                id="time"
-                type="text"
-                placeholder="HH:MM"
-                value={time}
-                onChange={handleTimeChange}
-                maxLength={5}
-                className="bg-[#1A1A1A] border-0 text-foreground"
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         <SheetFooter className="p-6 pt-4 border-t border-border mt-auto">
@@ -173,9 +225,17 @@ export const PushNotificationSheet = ({ open, onOpenChange }: PushNotificationSh
             </Button>
             <Button
               onClick={handleSubmit}
+              disabled={saving}
               className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              Agendar envio
+              {saving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                "Criar notificação"
+              )}
             </Button>
           </div>
         </SheetFooter>

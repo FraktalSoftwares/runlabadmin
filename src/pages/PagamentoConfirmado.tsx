@@ -11,6 +11,7 @@ interface LocationState {
   amount: number;
   planName: string;
   planType: string;
+  creditsAmount?: number;
 }
 
 const PLAN_DEFAULTS = {
@@ -41,6 +42,7 @@ const PagamentoConfirmado = () => {
   const planType = state?.planType || defaults.type;
   const amount = state?.amount || (plan === "avulsa" ? 59.9 : 610.0);
   const formattedAmount = `R$ ${amount.toFixed(2).replace(".", ",")}`;
+  const creditsAmount = state?.creditsAmount || (plan === "anual" ? 12 : 1);
 
   const handleReturnToApp = () => {
     if (APP_RETURN_URL) {
@@ -140,6 +142,16 @@ const PagamentoConfirmado = () => {
                   </span>
                   <span className="text-xl font-semibold text-[#CCF725]">
                     {formattedAmount}
+                  </span>
+                </div>
+
+                {/* Créditos adquiridos */}
+                <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#262626]">
+                  <span className="text-sm font-medium text-[#e0e0e0]">
+                    Créditos adquiridos
+                  </span>
+                  <span className="text-base font-semibold text-[#CCF725]">
+                    +{creditsAmount} {creditsAmount === 1 ? "crédito" : "créditos"}
                   </span>
                 </div>
               </div>

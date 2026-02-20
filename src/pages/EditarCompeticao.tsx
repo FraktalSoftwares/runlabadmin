@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,11 +17,27 @@ import { ChevronLeft, Upload, Pencil, CalendarIcon, CloudUpload, Check, X } from
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useCompetitionDetails } from "@/hooks/useCompetitionDetails";
+import { supabase } from "@/lib/supabase";
+
+function formatPriceCentsToInput(cents: number | null): string {
+  if (cents === null || cents === undefined) return "";
+  return "R$ " + (cents / 100).toFixed(2).replace(".", ",");
+}
+
+function parseValorToCents(valor: string): number {
+  const cleaned = (valor || "").replace(/\s/g, "").replace(/R\$\s?/i, "").replace(/\./g, "").replace(",", ".");
+  const num = parseFloat(cleaned);
+  if (Number.isNaN(num)) return 0;
+  return Math.round(num * 100);
+}
+
 const formSchema = z.object({
   nome: z.string().trim().min(1, "Nome da competição é obrigatório").max(100, "Nome muito longo"),
   descricao: z.string().trim().max(500, "Descrição muito longa"),
   modalidade: z.string().min(1, "Selecione uma modalidade"),
   formato: z.string().min(1, "Selecione um formato"),
+  mode: z.enum(["indoor", "outdoor"]).optional(),
   campeonato: z.string().optional(),
   distancia: z.string().min(1, "Selecione ao menos uma distância"),
   outraDistancia: z.string().optional(),
@@ -47,51 +63,122 @@ const formSchema = z.object({
   lote2CreditosAssinatura: z.boolean().optional()
 });
 type FormData = z.infer<typeof formSchema>;
+
+const defaultFormValues: FormData = {
+  nome: "",
+  descricao: "",
+  modalidade: "corrida",
+  formato: "presencial",
+  campeonato: "",
+  distancia: "outro",
+  outraDistancia: "",
+  inscricaoInicio: undefined,
+  inscricaoFim: undefined,
+  competicaoInicio: undefined,
+  competicaoFim: undefined,
+  tentativasIlimitadas: false,
+  numeroMaximoInscritos: false,
+  maxInscritos: "",
+  premiacoes: "sim",
+  quantidadeRecompensas: "",
+  outraQuantidade: "",
+  possuiKit: "sim",
+  tipoCompeticao: "paga",
+  lote1Nome: "",
+  lote1Preco: "",
+  lote1Descricao: "",
+  lote1CreditosAssinatura: false,
+  lote2Nome: "",
+  lote2Preco: "",
+  lote2Descricao: "",
+  lote2CreditosAssinatura: false
+};
+
 const EditarCompeticao = () => {
   const navigate = useNavigate();
-  const {
-    id
-  } = useParams();
+  const { id } = useParams<{ id: string }>();
+  const { data: competition, loading: loadingCompetition, error: errorCompetition } = useCompetitionDetails(id);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [selectedPatrocinadores, setSelectedPatrocinadores] = useState<File[]>([]);
-  const [previewPatrocinadores, setPreviewPatrocinadores] = useState<string[]>([]);
+  /** IDs dos patrocinadores da tabela competition_sponsors selecionados para esta competição */
+  const [selectedSponsorIds, setSelectedSponsorIds] = useState<string[]>([]);
+  /** Lista de todos os patrocinadores disponíveis (tabela competition_sponsors) */
+  const [availableSponsors, setAvailableSponsors] = useState<{ id: string; name: string; logo_url: string | null; sort_order: number }[]>([]);
   const [documento1, setDocumento1] = useState<File | null>(null);
   const [documento2, setDocumento2] = useState<File | null>(null);
   const [documento3, setDocumento3] = useState<File | null>(null);
   const [distanciaSelecionada, setDistanciaSelecionada] = useState<string>("outro");
+  const [isSaving, setIsSaving] = useState(false);
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      nome: "Desafio 5km",
-      descricao: "",
-      modalidade: "",
-      formato: "",
-      campeonato: "",
-      distancia: "outro",
-      outraDistancia: "",
-      inscricaoInicio: undefined,
-      inscricaoFim: undefined,
-      competicaoInicio: undefined,
+    defaultValues: defaultFormValues
+  });
+
+  // Preencher formulário quando os dados da competição carregarem
+  useEffect(() => {
+    if (!competition) return;
+    const lot0 = competition.lots[0];
+    const lot1 = competition.lots[1];
+    const firstDistance = competition.distances[0];
+    const distValue = firstDistance
+      ? (firstDistance.label?.toLowerCase().replace(/\s/g, "") === "outro" ? "outro" : firstDistance.label) || "outro"
+      : "outro";
+    const outraDist = firstDistance && firstDistance.label && !/^\d+\s*km$/i.test(firstDistance.label)
+      ? firstDistance.label
+      : "";
+    form.reset({
+      ...defaultFormValues,
+      nome: competition.title || "",
+      descricao: competition.description ?? "",
+      modalidade: "corrida",
+      formato: "presencial",
+      mode: (competition.mode === "indoor" || competition.mode === "outdoor") ? competition.mode : "outdoor",
+      campeonato: competition.championshipId ?? "",
+      distancia: distValue,
+      outraDistancia: outraDist,
+      inscricaoInicio: competition.registrationStartsAt ? new Date(competition.registrationStartsAt) : undefined,
+      inscricaoFim: competition.registrationEndsAt ? new Date(competition.registrationEndsAt) : undefined,
+      competicaoInicio: competition.startsAt ? new Date(competition.startsAt) : undefined,
       competicaoFim: undefined,
-      tentativasIlimitadas: false,
-      numeroMaximoInscritos: true,
+      tentativasIlimitadas: true,
+      numeroMaximoInscritos: false,
       maxInscritos: "",
-      premiacoes: "sim",
+      premiacoes: competition.prizeDescription ? "sim" : "nao",
       quantidadeRecompensas: "",
       outraQuantidade: "",
       possuiKit: "sim",
-      tipoCompeticao: "",
-      lote1Nome: "",
-      lote1Preco: "",
-      lote1Descricao: "",
-      lote1CreditosAssinatura: false,
-      lote2Nome: "",
-      lote2Preco: "",
-      lote2Descricao: "",
-      lote2CreditosAssinatura: false
-    }
-  });
+      tipoCompeticao: competition.isFree ? "gratuita" : "paga",
+      lote1Nome: lot0?.name ?? "",
+      lote1Preco: lot0 != null ? formatPriceCentsToInput(lot0.priceCents) : "",
+      lote1Descricao: lot0?.description ?? "",
+      lote1CreditosAssinatura: lot0?.isSubscriptionAllowed ?? false,
+      lote2Nome: lot1?.name ?? "",
+      lote2Preco: lot1 != null ? formatPriceCentsToInput(lot1.priceCents) : "",
+      lote2Descricao: lot1?.description ?? "",
+      lote2CreditosAssinatura: lot1?.isSubscriptionAllowed ?? false
+    });
+    if (competition.coverImageUrl) setPreviewUrl(competition.coverImageUrl);
+    setSelectedSponsorIds(competition.sponsors?.map((s) => s.id) ?? []);
+  }, [competition, form]);
+
+  // Carregar lista de patrocinadores da tabela competition_sponsors
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("competition_sponsors")
+        .select("id, name, logo_url, sort_order")
+        .order("sort_order")
+        .order("name");
+      if (!error && data) setAvailableSponsors(data);
+    })();
+  }, []);
+
+  const toggleSponsor = (sponsorId: string) => {
+    setSelectedSponsorIds((prev) =>
+      prev.includes(sponsorId) ? prev.filter((id) => id !== sponsorId) : [...prev, sponsorId]
+    );
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -113,29 +200,6 @@ const EditarCompeticao = () => {
     }
   };
 
-  const handlePatrocinadoresChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      setSelectedPatrocinadores(prev => [...prev, ...files]);
-      const urls = files.map(file => URL.createObjectURL(file));
-      setPreviewPatrocinadores(prev => [...prev, ...urls]);
-    }
-  };
-
-  const handlePatrocinadoresDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handlePatrocinadoresDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
-    if (files.length > 0) {
-      setSelectedPatrocinadores(prev => [...prev, ...files]);
-      const urls = files.map(file => URL.createObjectURL(file));
-      setPreviewPatrocinadores(prev => [...prev, ...urls]);
-    }
-  };
-
   const handleDocumentoChange = (e: React.ChangeEvent<HTMLInputElement>, setDoc: (file: File | null) => void) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -151,10 +215,133 @@ const EditarCompeticao = () => {
     }
   };
 
-  const handleSave = (data: FormData) => {
-    console.log("Form data:", data);
-    toast.success("Dados salvos com sucesso!");
+  const handleSave = async (data: FormData) => {
+    if (!id) return;
+    setIsSaving(true);
+    try {
+      const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
+      const regStart = data.inscricaoInicio?.toISOString() ?? null;
+      const regEnd = data.inscricaoFim?.toISOString() ?? null;
+      const isFree = data.tipoCompeticao === "gratuita";
+      const championshipId = data.campeonato && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
+      const maxRegistrations = data.numeroMaximoInscritos && data.maxInscritos?.trim()
+        ? parseInt(data.maxInscritos, 10) || null
+        : null;
+
+      const { error: updateError } = await supabase
+        .from("competitions")
+        .update({
+          title: data.nome.trim(),
+          description: data.descricao?.trim() || null,
+          starts_at: startsAt,
+          registration_starts_at: regStart,
+          registration_ends_at: regEnd,
+          mode: data.mode ?? "outdoor",
+          is_free: isFree,
+          championship_id: championshipId,
+          unlimited_attempts: data.tentativasIlimitadas ?? true,
+          max_registrations: maxRegistrations,
+          prize_description: data.premiacoes === "sim" ? (data.quantidadeRecompensas || data.outraQuantidade || null) : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
+
+      if (updateError) throw updateError;
+
+      // 1) Banner/capa da competição
+      if (selectedImage) {
+        const ext = selectedImage.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `competitions/${id}/cover.${ext}`;
+        const { error: uploadError } = await supabase.storage.from("sistema").upload(path, selectedImage, { upsert: true });
+        if (uploadError) {
+          throw new Error(`Falha ao enviar imagem da capa: ${uploadError.message}`);
+        }
+        const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
+        const { error: urlUpdateError } = await supabase
+          .from("competitions")
+          .update({ cover_image_url: urlData.publicUrl })
+          .eq("id", id);
+        if (urlUpdateError) throw urlUpdateError;
+      }
+
+      // 2) Patrocinadores: atualizar apenas a lista de IDs (seleção da tabela competition_sponsors)
+      const { error: sponsorsUpdateError } = await supabase
+        .from("competitions")
+        .update({ competition_sponsors: selectedSponsorIds.length > 0 ? selectedSponsorIds : null })
+        .eq("id", id);
+      if (sponsorsUpdateError) throw sponsorsUpdateError;
+
+      // Atualizar lotes existentes
+      if (competition) {
+        const lots = competition.lots;
+        if (lots[0] && (data.lote1Nome?.trim() || data.lote1Preco || data.lote1Descricao?.trim())) {
+          await supabase
+            .from("competition_lots")
+            .update({
+              name: data.lote1Nome?.trim() || lots[0].name,
+              description: data.lote1Descricao?.trim() || null,
+              price_cents: parseValorToCents(data.lote1Preco ?? ""),
+              is_subscription_allowed: data.lote1CreditosAssinatura ?? false
+            })
+            .eq("id", lots[0].id);
+        }
+        if (lots[1] && (data.lote2Nome?.trim() || data.lote2Preco || data.lote2Descricao?.trim())) {
+          await supabase
+            .from("competition_lots")
+            .update({
+              name: data.lote2Nome?.trim() || lots[1].name,
+              description: data.lote2Descricao?.trim() || null,
+              price_cents: parseValorToCents(data.lote2Preco ?? ""),
+              is_subscription_allowed: data.lote2CreditosAssinatura ?? false
+            })
+            .eq("id", lots[1].id);
+        }
+      }
+
+      toast.success("Dados salvos com sucesso!");
+      navigate(`/gestao-competicoes/${id}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar competição");
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  if (!id) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="pt-24 container mx-auto px-6 py-8">
+          <p className="text-destructive">ID da competição não informado.</p>
+          <Button variant="link" onClick={() => navigate("/gestao-competicoes")}>Voltar</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadingCompetition) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="pt-24 container mx-auto px-6 py-8 flex items-center justify-center">
+          <p className="text-muted-foreground">Carregando competição...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorCompetition || !competition) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="pt-24 container mx-auto px-6 py-8">
+          <p className="text-destructive">{errorCompetition?.message ?? "Competição não encontrada."}</p>
+          <Button variant="link" onClick={() => navigate("/gestao-competicoes")}>Voltar à lista</Button>
+        </div>
+      </div>
+    );
+  }
+
   return <div className="min-h-screen bg-background">
       <Header />
       <form onSubmit={form.handleSubmit(handleSave)} className="pt-24">
@@ -167,11 +354,11 @@ const EditarCompeticao = () => {
               Voltar
             </Button>
 
-            <Button type="submit" className="gap-2 border-0 hover:brightness-90 transition-all" style={{
+            <Button type="submit" disabled={isSaving} className="gap-2 border-0 hover:brightness-90 transition-all" style={{
             backgroundColor: '#CCF725',
             color: '#1A1A1A'
           }}>
-              Salvar dados
+              {isSaving ? "Salvando..." : "Salvar dados"}
             </Button>
           </div>
         </div>
@@ -701,76 +888,44 @@ const EditarCompeticao = () => {
             </div>
           </div>
 
-          {/* Patrocinadores Section */}
+          {/* Patrocinadores Section - seleção da tabela competition_sponsors */}
           <div className="mt-6">
             <div className="rounded-[20px] border border-border/50 bg-[#2A2A2A] p-8">
-              <h2 className="text-lg font-semibold mb-6">Patrocinadores</h2>
-
-              {/* Upload Area */}
-              <div 
-                className="relative rounded-[20px] bg-[#1A1A1A] p-12 flex flex-col items-center justify-center gap-4 min-h-[200px]"
-                onDragOver={handlePatrocinadoresDragOver}
-                onDrop={handlePatrocinadoresDrop}
-              >
-                {previewPatrocinadores.length > 0 ? (
-                  <div className="w-full flex flex-wrap gap-4 items-center justify-center">
-                    {previewPatrocinadores.map((url, index) => (
-                      <div key={index} className="relative">
-                        <img 
-                          src={url} 
-                          alt={`Patrocinador ${index + 1}`} 
-                          className="max-w-[150px] max-h-[100px] rounded-lg object-contain" 
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedPatrocinadores(prev => prev.filter((_, i) => i !== index));
-                            setPreviewPatrocinadores(prev => prev.filter((_, i) => i !== index));
-                          }}
-                          className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center hover:brightness-90 transition-all"
-                          style={{ backgroundColor: '#CCF725' }}
-                        >
-                          <X className="w-4 h-4" style={{ color: '#1A1A1A' }} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <>
-                    <div 
-                      className="w-16 h-16 rounded-full flex items-center justify-center" 
-                      style={{ backgroundColor: '#CCF725' }}
+              <h2 className="text-lg font-semibold mb-2">Patrocinadores</h2>
+              <p className="text-sm text-muted-foreground mb-6">Selecione os patrocinadores que aparecerão nesta competição.</p>
+              <div className="flex flex-wrap gap-4">
+                {availableSponsors.map((sponsor) => {
+                  const isSelected = selectedSponsorIds.includes(sponsor.id);
+                  return (
+                    <button
+                      key={sponsor.id}
+                      type="button"
+                      onClick={() => toggleSponsor(sponsor.id)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-xl border-2 p-4 min-w-[120px] transition-all",
+                        isSelected
+                          ? "border-[#CCF725] bg-[#CCF725]/10"
+                          : "border-border/50 bg-[#1A1A1A] hover:border-muted-foreground/50"
+                      )}
                     >
-                      <CloudUpload 
-                        className="w-8 h-8" 
-                        style={{ color: '#1A1A1A' }} 
-                      />
-                    </div>
-                    
-                    <p className="text-sm" style={{ color: '#CCF725' }}>
-                      Arraste e solte as imagens aqui
-                    </p>
-
-                    <input 
-                      type="file" 
-                      id="patrocinadores-upload" 
-                      className="hidden" 
-                      accept="image/*"
-                      multiple
-                      onChange={handlePatrocinadoresChange}
-                    />
-                    <label htmlFor="patrocinadores-upload">
-                      <Button 
-                        variant="outline" 
-                        className="cursor-pointer border-[#CCF725] text-[#CCF725] hover:bg-[#CCF725] hover:text-[#1A1A1A] bg-transparent" 
-                        asChild
-                      >
-                        <span>Procurar arquivo</span>
-                      </Button>
-                    </label>
-                  </>
-                )}
+                      <div className="w-16 h-16 rounded-lg bg-[#2A2A2A] flex items-center justify-center overflow-hidden">
+                        {sponsor.logo_url ? (
+                          <img src={sponsor.logo_url} alt={sponsor.name} className="max-w-full max-h-full object-contain" />
+                        ) : (
+                          <span className="text-xs text-muted-foreground truncate px-1 text-center">{sponsor.name.slice(0, 8)}</span>
+                        )}
+                      </div>
+                      <span className="text-sm text-foreground font-medium text-center line-clamp-2">{sponsor.name}</span>
+                      <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center" style={{ borderColor: isSelected ? '#CCF725' : undefined, backgroundColor: isSelected ? '#CCF725' : undefined }}>
+                        {isSelected && <Check className="w-3 h-3" style={{ color: '#1A1A1A' }} />}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
+              {availableSponsors.length === 0 && (
+                <p className="text-sm text-muted-foreground">Nenhum patrocinador cadastrado na base. Cadastre em competition_sponsors para exibir aqui.</p>
+              )}
             </div>
           </div>
 
@@ -943,6 +1098,7 @@ const EditarCompeticao = () => {
           <div className="mt-5 flex justify-end">
             <Button 
               type="submit" 
+              disabled={isSaving}
               className="gap-2 border-0 hover:brightness-90 transition-all px-8 py-3" 
               style={{
                 backgroundColor: '#CCF725',
@@ -950,7 +1106,7 @@ const EditarCompeticao = () => {
               }}
             >
               <Check className="w-5 h-5" />
-              Salvar dados
+              {isSaving ? "Salvando..." : "Salvar dados"}
             </Button>
           </div>
         </div>

@@ -18,6 +18,7 @@ import CadastrarCampeonato from "./pages/CadastrarCampeonato";
 import CadastrarCampeonatoForm from "./pages/CadastrarCampeonatoForm";
 import Login from "./pages/Login";
 import PasswordRecovery from "./pages/PasswordRecovery";
+import DefinarSenha from "./pages/DefinarSenha";
 import MinhaConta from "./pages/MinhaConta";
 import PlanoSelecao from "./pages/PlanoSelecao";
 import Checkout from "./pages/Checkout";
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/recuperacao-senha" element={<PasswordRecovery />} />
+          <Route path="/definir-senha" element={<DefinarSenha />} />
           {/* Rotas do corredor */}
           <Route element={<CorredorGuard />}>
             <Route path="/corredor/planos" element={<PlanoSelecao />} />

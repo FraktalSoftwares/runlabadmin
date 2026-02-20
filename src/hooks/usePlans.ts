@@ -15,6 +15,7 @@ export interface Plan {
   highlight: boolean;
   is_active: boolean;
   sort_order: number;
+  credits_amount: number;
 }
 
 export function usePlans() {

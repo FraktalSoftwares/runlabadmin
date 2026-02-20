@@ -10,8 +10,14 @@ export type CorredorFilters = {
   naoEParceiro?: boolean;
   /** preferred_distance no perfil */
   preferredDistance?: string;
-  /** Mínimo de inscrições em competições (ex: "10+" -> 10) */
+  /** Mínimo de inscrições em competições (0 = nenhuma, 1+ = mínimo) */
   participacaoMin?: number;
+  /** Plano: Gratuito (0 créditos) ou Com créditos (1+) */
+  plano?: "Gratuito" | "ComCreditos";
+  /** Cidade (ilike) - exige coluna city na view */
+  cidade?: string;
+  /** Estado (ilike) - exige coluna state na view */
+  estado?: string;
 };
 
 export type CorredorRow = {
@@ -50,9 +56,15 @@ async function fetchCorredores(
   page: number,
   pageSize: number
 ): Promise<{ data: CorredorRow[]; total: number }> {
-  // Se filtro de participação, primeiro obter user_ids que atendem
+  const needCityState = Boolean(filters.cidade?.trim() || filters.estado?.trim());
+  const selectFields = needCityState
+    ? "id, full_name, email, preferred_distance, tipo_user, updated_at, credit_balance, city, state"
+    : "id, full_name, email, preferred_distance, tipo_user, updated_at, credit_balance";
+
+  // Filtro de participação: 0 = só quem tem zero inscrições; >0 = mínimo de inscrições
   let userIdsParticipacao: string[] | null = null;
-  if (filters.participacaoMin != null && filters.participacaoMin > 0) {
+  let userIdsExcluirParaZero: string[] | null = null;
+  if (filters.participacaoMin != null) {
     const { data: regs } = await supabase
       .from("competition_registrations")
       .select("user_id")
@@ -61,17 +73,21 @@ async function fetchCorredores(
     (regs ?? []).forEach((r) => {
       countByUser[r.user_id] = (countByUser[r.user_id] ?? 0) + 1;
     });
-    userIdsParticipacao = Object.entries(countByUser)
-      .filter(([, c]) => c >= filters.participacaoMin!)
-      .map(([id]) => id);
-    if (userIdsParticipacao.length === 0) {
-      return { data: [], total: 0 };
+    if (filters.participacaoMin === 0) {
+      userIdsExcluirParaZero = Object.keys(countByUser);
+    } else {
+      userIdsParticipacao = Object.entries(countByUser)
+        .filter(([, c]) => c >= filters.participacaoMin!)
+        .map(([id]) => id);
+      if (userIdsParticipacao.length === 0) {
+        return { data: [], total: 0 };
+      }
     }
   }
 
   let query = supabase
     .from("v_corredores_admin")
-    .select("id, full_name, email, preferred_distance, tipo_user, updated_at", { count: "exact" })
+    .select(selectFields, { count: "exact" })
     .order("full_name", { ascending: true });
 
   const search = filters.search?.trim();
@@ -88,11 +104,24 @@ async function fetchCorredores(
     query = query.eq("tipo_user", "Corredor");
   }
   if (filters.preferredDistance) {
-    // DB has values like "Até 5 km", "De 6 km a 20 km" etc.
     query = query.ilike("preferred_distance", `%${filters.preferredDistance}%`);
+  }
+  if (filters.plano === "Gratuito") {
+    query = query.eq("credit_balance", 0);
+  } else if (filters.plano === "ComCreditos") {
+    query = query.gte("credit_balance", 1);
+  }
+  if (filters.cidade?.trim()) {
+    query = query.ilike("city", `%${filters.cidade.trim()}%`);
+  }
+  if (filters.estado?.trim()) {
+    query = query.ilike("state", `%${filters.estado.trim()}%`);
   }
   if (userIdsParticipacao) {
     query = query.in("id", userIdsParticipacao);
+  }
+  if (userIdsExcluirParaZero && userIdsExcluirParaZero.length > 0) {
+    query = query.not("id", "in", `(${userIdsExcluirParaZero.join(",")})`);
   }
 
   const from = (page - 1) * pageSize;
@@ -109,16 +138,21 @@ async function fetchCorredores(
     preferred_distance: string | null;
     tipo_user: string | null;
     updated_at: string | null;
-  }) => ({
-    id: r.id,
-    nome: r.full_name ?? "—",
-    email: r.email ?? "—",
-    telefone: "—",
-    preferencia: preferredDistanceToLabel(r.preferred_distance),
-    vinculo: r.tipo_user === "Parceiro" ? "Corredor/parceiro" : "Corredor",
-    ultimoAcesso: formatLastAccess(r.updated_at),
-    plano: "Gratuito",
-  }));
+    credit_balance: number | null;
+  }) => {
+    const balance = Number(r.credit_balance) || 0;
+    const plano = balance === 0 ? "Gratuito" : String(balance);
+    return {
+      id: r.id,
+      nome: r.full_name ?? "—",
+      email: r.email ?? "—",
+      telefone: "—",
+      preferencia: preferredDistanceToLabel(r.preferred_distance),
+      vinculo: r.tipo_user === "Parceiro" ? "Corredor/parceiro" : "Corredor",
+      ultimoAcesso: formatLastAccess(r.updated_at),
+      plano,
+    };
+  });
 
   return { data, total };
 }
@@ -154,6 +188,9 @@ export function useCorredores(
     filters.naoEParceiro,
     filters.preferredDistance,
     filters.participacaoMin,
+    filters.plano,
+    filters.cidade,
+    filters.estado,
     page,
     pageSize,
   ]);

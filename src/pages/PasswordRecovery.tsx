@@ -43,13 +43,17 @@ const PasswordRecovery = () => {
     const hash = window.location.hash;
     const params = new URLSearchParams(hash.replace("#", ""));
     const type = params.get("type");
-    if (type === "recovery" || hash.includes("access_token")) {
-      // Supabase processa o hash automaticamente; onAuthStateChange dispara PASSWORD_RECOVERY
-      // Se já tiver sessão e for recovery, mostrar form (fallback)
+    if (type === "recovery" || type === "invite" || hash.includes("access_token")) {
+      // Supabase processa o hash; onAuthStateChange dispara PASSWORD_RECOVERY (recovery) ou SIGNED_IN (invite)
+      // Se já tiver sessão e for recovery/invite, mostrar form de definir senha (fallback)
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
-          const isRecovery = type === "recovery" || hash.includes("type=recovery");
-          if (isRecovery) setScreen("set_password");
+          const isRecoveryOrInvite =
+            type === "recovery" ||
+            type === "invite" ||
+            hash.includes("type=recovery") ||
+            hash.includes("type=invite");
+          if (isRecoveryOrInvite) setScreen("set_password");
           window.history.replaceState(null, "", window.location.pathname);
         }
         setIsCheckingRecovery(false);

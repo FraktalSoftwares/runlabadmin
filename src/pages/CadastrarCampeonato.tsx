@@ -68,6 +68,7 @@ const CadastrarCampeonato = () => {
   const [bannerImage, setBannerImage] = useState<string | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [miniBannerImage, setMiniBannerImage] = useState<string | null>(null);
+  const [miniBannerFile, setMiniBannerFile] = useState<File | null>(null);
   const [championships, setChampionships] = useState<ChampionshipOption[]>([]);
   const [championshipsLoading, setChampionshipsLoading] = useState(true);
   const [selectedDistances, setSelectedDistances] = useState<string[]>([]);
@@ -103,16 +104,16 @@ const CadastrarCampeonato = () => {
   });
   const { register, handleSubmit, formState: { errors }, setValue, watch } = form;
 
+  const setBannerFromFile = (file: File | null) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setBannerFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setBannerImage(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setBannerFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBannerImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    setBannerFromFile(e.target.files?.[0] ?? null);
   };
 
   useEffect(() => {
@@ -128,15 +129,16 @@ const CadastrarCampeonato = () => {
     })();
   }, []);
 
+  const setMiniBannerFromFile = (file: File | null) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setMiniBannerFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setMiniBannerImage(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
   const handleMiniBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setMiniBannerImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    setMiniBannerFromFile(e.target.files?.[0] ?? null);
   };
 
   const distances = [
@@ -223,13 +225,47 @@ const CadastrarCampeonato = () => {
       if (compError) throw compError;
       const competitionId = comp.id;
 
+      let coverImageUrl: string | null = null;
+      let thumbnailUrl: string | null = null;
+
+      const contentType = (file: File) => file.type?.startsWith("image/") ? file.type : "image/jpeg";
+
       if (bannerFile) {
         const ext = bannerFile.name.split(".").pop()?.toLowerCase() || "jpg";
         const path = `competitions/${competitionId}/cover.${ext}`;
-        const { error: uploadError } = await supabase.storage.from("sistema").upload(path, bannerFile, { upsert: true });
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
-          await supabase.from("competitions").update({ cover_image_url: urlData.publicUrl }).eq("id", competitionId);
+        const { error: uploadError } = await supabase.storage
+          .from("sistema")
+          .upload(path, bannerFile, { upsert: true, contentType: contentType(bannerFile) });
+        if (uploadError) {
+          toast({ title: "Erro ao enviar banner da competição", description: uploadError.message, variant: "destructive" });
+          throw new Error(`Banner: ${uploadError.message}`);
+        }
+        const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
+        coverImageUrl = urlData.publicUrl;
+      }
+
+      if (miniBannerFile) {
+        const ext = miniBannerFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `competitions/${competitionId}/thumbnail.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("sistema")
+          .upload(path, miniBannerFile, { upsert: true, contentType: contentType(miniBannerFile) });
+        if (uploadError) {
+          toast({ title: "Erro ao enviar mini banner", description: uploadError.message, variant: "destructive" });
+          throw new Error(`Mini banner: ${uploadError.message}`);
+        }
+        const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
+        thumbnailUrl = urlData.publicUrl;
+      }
+
+      if (coverImageUrl !== null || thumbnailUrl !== null) {
+        const updatePayload: { cover_image_url?: string | null; thumbnail_url?: string | null } = {};
+        if (coverImageUrl !== null) updatePayload.cover_image_url = coverImageUrl;
+        if (thumbnailUrl !== null) updatePayload.thumbnail_url = thumbnailUrl;
+        const { error: updateError } = await supabase.from("competitions").update(updatePayload).eq("id", competitionId);
+        if (updateError) {
+          toast({ title: "Erro ao salvar URLs dos banners", description: updateError.message, variant: "destructive" });
+          throw new Error(`Salvar URLs dos banners: ${updateError.message}`);
         }
       }
 
@@ -400,7 +436,17 @@ const CadastrarCampeonato = () => {
                 {/* Banner da competição */}
                 <div className="bg-[#1A1A1A] p-6 rounded-lg">
                   <Label className="text-foreground">Banner da competição</Label>
-                  <div className="mt-4 bg-[#262626] border-2 border-dashed border-[#CCF725] rounded-lg p-8 text-center hover:border-[#CCF725]/80 transition-colors cursor-pointer">
+                  <div
+                    className="mt-4 bg-[#262626] border-2 border-dashed border-[#CCF725] rounded-lg p-8 text-center hover:border-[#CCF725]/80 transition-colors cursor-pointer"
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.setAttribute("data-drag", "true"); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.removeAttribute("data-drag"); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.removeAttribute("data-drag");
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) setBannerFromFile(file);
+                    }}
+                  >
                     <input
                       type="file"
                       id="banner"
@@ -408,7 +454,7 @@ const CadastrarCampeonato = () => {
                       onChange={handleBannerUpload}
                       className="hidden"
                     />
-                    <label htmlFor="banner" className="cursor-pointer">
+                    <label htmlFor="banner" className="cursor-pointer block">
                       {bannerImage ? (
                         <img src={bannerImage} alt="Banner" className="max-h-32 mx-auto" />
                       ) : (
@@ -433,7 +479,17 @@ const CadastrarCampeonato = () => {
                   <Label className="text-foreground">
                     Mini banner <span className="text-muted-foreground">(opcional)</span>
                   </Label>
-                  <div className="mt-4 bg-[#262626] border-2 border-dashed border-[#CCF725] rounded-lg p-8 text-center hover:border-[#CCF725]/80 transition-colors cursor-pointer">
+                  <div
+                    className="mt-4 bg-[#262626] border-2 border-dashed border-[#CCF725] rounded-lg p-8 text-center hover:border-[#CCF725]/80 transition-colors cursor-pointer"
+                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.setAttribute("data-drag", "true"); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.removeAttribute("data-drag"); }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.removeAttribute("data-drag");
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) setMiniBannerFromFile(file);
+                    }}
+                  >
                     <input
                       type="file"
                       id="miniBanner"
@@ -441,7 +497,7 @@ const CadastrarCampeonato = () => {
                       onChange={handleMiniBannerUpload}
                       className="hidden"
                     />
-                    <label htmlFor="miniBanner" className="cursor-pointer">
+                    <label htmlFor="miniBanner" className="cursor-pointer block">
                       {miniBannerImage ? (
                         <img src={miniBannerImage} alt="Mini Banner" className="max-h-32 mx-auto" />
                       ) : (

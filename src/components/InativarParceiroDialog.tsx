@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 interface InativarParceiroDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: () => void | Promise<void>;
   parceiroNome?: string;
 }
 
@@ -52,9 +52,8 @@ export const InativarParceiroDialog = ({
               Cancelar
             </Button>
             <Button
-              onClick={() => {
-                onConfirm();
-                onOpenChange(false);
+              onClick={async () => {
+                await onConfirm();
               }}
               className="flex-1 bg-muted-foreground/70 text-foreground hover:bg-muted-foreground/90"
             >

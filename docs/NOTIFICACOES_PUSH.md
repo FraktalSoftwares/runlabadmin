@@ -6,17 +6,21 @@
    - **Envio imediato**: entra na fila e é processado no próximo minuto.
    - **Envio agendado**: data/hora definidas; é processado quando o horário chegar.
 
-2. **Fila** (`notification_queue`): cada registro criado pelo admin fica com `status = 'pending'`.
+2. **Fila** (`notification_queue`): cada registro criado pelo admin fica com `status = 'pending'` e `target_audience` indicando o público-alvo (`'Corredor'` ou `'Parceiro'`).
 
 3. **Cron (pg_cron)**: a cada minuto roda `SELECT public.process_notification_queue();`:
    - Processa itens **imediato** (pendentes com `send_type = 'immediate'`).
    - Processa itens **agendado** cuja `scheduled_at <= now()`.
-   - Para cada item: insere uma linha em `notifications` para **cada usuário com tipo_user = 'Corredor'** (em `profiles`) e marca o item como `sent`.
+   - Para cada item: insere uma linha em `notifications` para os usuários correspondentes ao `target_audience`:
+     - `target_audience = 'Corredor'` → usuários com `tipo_user = 'Corredor'`
+     - `target_audience = 'Parceiro'` → usuários com `tipo_user = 'Parceiro'` **e** `is_partner = true`
+   - Marca o item como `sent`.
 
 ## Banco (Supabase)
 
-- **Tabela** `notification_queue`: fila de notificações (title, description, send_type, scheduled_at, status).
-- **Função** `process_notification_queue()`: processa todos os itens prontos e envia apenas para usuários com `tipo_user = 'Corredor'`.
+- **Tabela** `notification_queue`: fila de notificações (title, description, send_type, scheduled_at, status, target_audience).
+- **Função** `process_notification_queue()`: processa todos os itens prontos.
+- **Função** `process_notification_queue_item(queue_id)`: insere notificações para os usuários do público-alvo definido em `target_audience`.
 - **Job cron** `process-notification-queue`: schedule `* * * * *` (todo minuto).
 
 ## Gerenciar o cron

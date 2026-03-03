@@ -201,8 +201,18 @@ const DetalhesTab = ({ competition }: { competition: CompetitionDetail }) => {
               <div className="pt-6">
                 <p className="text-xs text-muted-foreground mb-2">Modalidade</p>
                 <p className="text-base font-medium text-foreground">
-                  {competition.mode === "outdoor" ? "Corrida outdoor" : "Corrida indoor"}
+                  {competition.mode === "outdoor" ? "Outdoor" : competition.mode === "mista" ? "Mista" : "Indoor"}
                 </p>
+              </div>
+
+              <div className="pt-6">
+                <p className="text-xs text-muted-foreground mb-2">Formato</p>
+                <p className="text-base font-medium text-foreground">
+                  {competition.formatType === "patrocinada" ? "Patrocinada" : competition.formatType === "personalizado" ? "Personalizado" : "Oficial"}
+                </p>
+                {competition.formatType === "personalizado" && competition.formatObservations && (
+                  <p className="text-sm text-muted-foreground mt-1">{competition.formatObservations}</p>
+                )}
               </div>
             </CardContent>
           </Card>

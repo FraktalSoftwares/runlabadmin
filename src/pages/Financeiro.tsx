@@ -1,16 +1,9 @@
 import { Header } from "@/components/Header";
 import { FinanceiroTabProvider, FinanceiroTabs, useFinanceiroTab } from "@/components/FinanceiroTabs";
-import { FinanceiroActions } from "@/components/FinanceiroActions";
-import { FinanceiroTable } from "@/components/FinanceiroTable";
 import { FinanceiroOverview } from "@/components/FinanceiroOverview";
-import { CompeticoesFilterProvider } from "@/contexts/CompeticoesFilterContext";
-import { CompeticoesActions } from "@/components/CompeticoesActions";
-import { CompeticoesTable } from "@/components/CompeticoesTable";
-import { RecebimentosActions } from "@/components/RecebimentosActions";
-import { RecebimentosTable } from "@/components/RecebimentosTable";
-import { RepassesActions } from "@/components/RepassesActions";
-import { RepassesTable } from "@/components/RepassesTable";
-import { Pagination } from "@/components/Pagination";
+import { FinanceiroCompeticoesContent } from "@/components/FinanceiroCompeticoesContent";
+import { FinanceiroRecebimentosContent } from "@/components/FinanceiroRecebimentosContent";
+import { FinanceiroRepassesContent } from "@/components/FinanceiroRepassesContent";
 
 const FinanceiroContent = () => {
   const { activeTab } = useFinanceiroTab();
@@ -20,41 +13,18 @@ const FinanceiroContent = () => {
   }
 
   if (activeTab === "competitions") {
-    return (
-      <CompeticoesFilterProvider>
-        <CompeticoesActions />
-        <CompeticoesTable />
-      </CompeticoesFilterProvider>
-    );
+    return <FinanceiroCompeticoesContent />;
   }
 
   if (activeTab === "receipts") {
-    return (
-      <>
-        <RecebimentosActions />
-        <RecebimentosTable />
-        <Pagination />
-      </>
-    );
+    return <FinanceiroRecebimentosContent />;
   }
 
   if (activeTab === "transfers") {
-    return (
-      <>
-        <RepassesActions />
-        <RepassesTable />
-        <Pagination />
-      </>
-    );
+    return <FinanceiroRepassesContent />;
   }
 
-  return (
-    <>
-      <FinanceiroActions />
-      <FinanceiroTable />
-      <Pagination />
-    </>
-  );
+  return null;
 };
 
 const Financeiro = () => {

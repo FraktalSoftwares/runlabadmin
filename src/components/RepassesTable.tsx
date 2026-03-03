@@ -6,144 +6,106 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { RepasseDetailsDialog } from "@/components/RepasseDetailsDialog";
-import { useState } from "react";
+import { Loader2 } from "lucide-react";
+import type { RepasseRow, RepasseStatus } from "@/hooks/useRepasses";
 
-const mockData = [
-  {
-    nome: "Smart Fit",
-    tipoParceiro: "Academia",
-    repasses: "R$1.500,00",
-    ultimoRepasse: "01/10/25",
-    status: "em_processamento"
-  },
-  {
-    nome: "Pratique",
-    tipoParceiro: "Academia",
-    repasses: "R$1.240,00",
-    ultimoRepasse: "01/09/25",
-    status: "em_processamento"
-  },
-  {
-    nome: "Carla Guedes",
-    tipoParceiro: "Treinador",
-    repasses: "R$1.240,00",
-    ultimoRepasse: "01/08/25",
-    status: "erro"
-  },
-  {
-    nome: "João Dantas",
-    tipoParceiro: "Treinador",
-    repasses: "R$1.500,00",
-    ultimoRepasse: "01/07/25",
-    status: "pago"
-  },
-  {
-    nome: "Fernando Dantas",
-    tipoParceiro: "Influenciador",
-    repasses: "R$1.240,00",
-    ultimoRepasse: "01/06/25",
-    status: "pago"
-  },
-  {
-    nome: "Patrick Porto",
-    tipoParceiro: "Influenciador",
-    repasses: "R$1.390,00",
-    ultimoRepasse: "01/05/25",
-    status: "pago"
-  },
-  {
-    nome: "Pratique",
-    tipoParceiro: "Assessoria",
-    repasses: "R$1.390,00",
-    ultimoRepasse: "01/04/25",
-    status: "pago"
-  },
-  {
-    nome: "Pratique",
-    tipoParceiro: "Assessoria",
-    repasses: "R$1.540,00",
-    ultimoRepasse: "01/03/25",
-    status: "pago"
-  },
-  {
-    nome: "Bruna Silva",
-    tipoParceiro: "Influenciador",
-    repasses: "R$1.390,00",
-    ultimoRepasse: "01/02/25",
-    status: "pago"
-  },
-  {
-    nome: "Life Pro",
-    tipoParceiro: "Academia",
-    repasses: "R$1.540,00",
-    ultimoRepasse: "01/01/25",
-    status: "pago"
-  },
-];
-
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case "pago":
-      return <Badge className="bg-success/20 text-success-foreground hover:bg-success/20">Pago</Badge>;
-    case "em_processamento":
-      return <Badge className="bg-muted text-foreground hover:bg-muted">Em processamento</Badge>;
-    case "erro":
-      return <Badge className="bg-destructive/20 text-destructive hover:bg-destructive/20">Erro</Badge>;
-    default:
-      return null;
-  }
-};
-
-export const RepassesTable = () => {
-  const [selectedRepasse, setSelectedRepasse] = useState<typeof mockData[0] | null>(null);
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
-
-  const handleRowClick = (repasse: typeof mockData[0]) => {
-    setSelectedRepasse(repasse);
-    setDetailsDialogOpen(true);
+function StatusBadge({ status }: { status: RepasseStatus }) {
+  const config: Record<RepasseStatus, { bg: string; text: string; label: string }> = {
+    pendente: { bg: "bg-[#FEE59A]", text: "text-[#654C01]", label: "Saque solicitado" },
+    em_processamento: { bg: "bg-[#C5CCD3]", text: "text-[#2C333A]", label: "Processando" },
+    aprovado: { bg: "bg-[#C5CCD3]", text: "text-[#2C333A]", label: "Processando" },
+    pago: { bg: "bg-[#B0E8D1]", text: "text-[#174F38]", label: "Pago" },
+    erro: { bg: "bg-[#EEAFAA]", text: "text-[#551611]", label: "Erro" },
+    rejeitado: { bg: "bg-[#EEAFAA]", text: "text-[#551611]", label: "Rejeitado" },
   };
 
-  return (
-    <>
-    <div className="rounded-lg overflow-hidden border border-border">
-      <div className="px-6 py-4 bg-[#262626]">
-        <h2 className="text-xl font-semibold text-foreground">Repasses para parceiros</h2>
-      </div>
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-table-header hover:bg-table-header">
-            <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Nome</TableHead>
-            <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Tipo de parceiro</TableHead>
-            <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Repasses</TableHead>
-            <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Último repasse</TableHead>
-            <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {mockData.map((row, index) => (
-            <TableRow 
-              key={index}
-              className="bg-table-row hover:bg-table-row-hover cursor-pointer"
-              onClick={() => handleRowClick(row)}
-            >
-              <TableCell className="text-foreground">{row.nome}</TableCell>
-              <TableCell className="text-foreground">{row.tipoParceiro}</TableCell>
-              <TableCell className="text-foreground">{row.repasses}</TableCell>
-              <TableCell className="text-foreground">{row.ultimoRepasse}</TableCell>
-              <TableCell>{getStatusBadge(row.status)}</TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+  const c = config[status] ?? config.em_processamento;
 
-    <RepasseDetailsDialog 
-      open={detailsDialogOpen} 
-      onOpenChange={setDetailsDialogOpen}
-      repasse={selectedRepasse}
-    />
-    </>
+  return (
+    <span
+      className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-sm w-[136px] ${c.bg} ${c.text}`}
+    >
+      {c.label}
+    </span>
+  );
+}
+
+interface RepassesTableProps {
+  rows: RepasseRow[];
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+  onRowClick: (row: RepasseRow) => void;
+}
+
+export const RepassesTable = ({
+  rows,
+  isLoading,
+  isError,
+  error,
+  onRowClick,
+}: RepassesTableProps) => {
+  return (
+    <div className="rounded-2xl overflow-hidden">
+      <div className="px-5 py-4 bg-[#262626]">
+        <h2 className="text-xl font-semibold text-white">
+          Repasses para parceiros
+        </h2>
+      </div>
+
+      {isLoading && (
+        <div className="flex justify-center py-16 bg-[#262626]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {isError && (
+        <div className="px-6 py-4 text-destructive text-sm bg-[#262626]">
+          {error instanceof Error ? error.message : "Erro ao carregar repasses."}
+        </div>
+      )}
+
+      {!isLoading && !isError && (
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-[#4D4D4D] hover:bg-[#4D4D4D] border-b border-[#808080]">
+              <TableHead className="text-xs font-medium text-[#E0E0E0]">Nome</TableHead>
+              <TableHead className="text-xs font-medium text-[#E0E0E0]">Tipo de parceiro</TableHead>
+              <TableHead className="text-xs font-medium text-[#E0E0E0]">Total já repassado</TableHead>
+              <TableHead className="text-xs font-medium text-[#E0E0E0]">Último repasse</TableHead>
+              <TableHead className="text-xs font-medium text-[#E0E0E0]">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <TableRow className="bg-[#262626] hover:bg-[#262626]">
+                <TableCell
+                  colSpan={5}
+                  className="text-center text-muted-foreground py-12"
+                >
+                  Nenhuma solicitação de repasse encontrada.
+                </TableCell>
+              </TableRow>
+            ) : (
+              rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  className="border-b border-[#808080] hover:bg-muted/30 transition-colors bg-[#262626] cursor-pointer"
+                  onClick={() => onRowClick(row)}
+                >
+                  <TableCell className="text-sm text-[#E0E0E0]">{row.nome}</TableCell>
+                  <TableCell className="text-sm text-[#E0E0E0]">{row.tipoParceiro}</TableCell>
+                  <TableCell className="text-sm text-[#E0E0E0]">{row.repassesFormatted}</TableCell>
+                  <TableCell className="text-sm text-[#E0E0E0]">{row.ultimoRepasse}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={row.status} />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      )}
+    </div>
   );
 };

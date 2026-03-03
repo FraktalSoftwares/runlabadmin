@@ -23,15 +23,15 @@ import { supabase } from "@/lib/supabase";
 const formSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   descricao: z.string().optional(),
-  modalidade: z.string().min(1, "Modalidade é obrigatória"),
-  formato: z.string().min(1, "Formato é obrigatório"),
+  modalidade: z.enum(["indoor", "outdoor", "mista"], { required_error: "Modalidade é obrigatória" }),
+  formato: z.enum(["oficial", "patrocinada", "personalizado"], { required_error: "Formato é obrigatório" }),
+  formatoObservacoes: z.string().optional(),
   campeonato: z.string().optional(),
   inscricaoInicio: z.date().optional(),
   inscricaoFim: z.date().optional(),
   competicaoInicio: z.date().optional(),
   competicaoFim: z.date().optional(),
   tipoCompeticao: z.enum(["gratuita", "paga"]).optional(),
-  mode: z.enum(["indoor", "outdoor"]).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -91,15 +91,15 @@ const CadastrarCampeonato = () => {
     defaultValues: {
       nome: "",
       descricao: "",
-      modalidade: "",
-      formato: "",
+      modalidade: undefined,
+      formato: undefined,
+      formatoObservacoes: "",
       campeonato: "",
       inscricaoInicio: undefined,
       inscricaoFim: undefined,
       competicaoInicio: undefined,
       competicaoFim: undefined,
       tipoCompeticao: "paga",
-      mode: "outdoor",
     },
   });
   const { register, handleSubmit, formState: { errors }, setValue, watch } = form;
@@ -208,7 +208,9 @@ const CadastrarCampeonato = () => {
           starts_at: startsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
-          mode: data.mode ?? "outdoor",
+          mode: data.modalidade ?? "outdoor",
+          format_type: data.formato ?? "oficial",
+          format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,
           status,
           is_free: isFree,
           cover_image_url: null,
@@ -396,14 +398,14 @@ const CadastrarCampeonato = () => {
                   <Label htmlFor="modalidade" className="text-foreground">
                     Modalidade
                   </Label>
-                  <Select value={watch("modalidade")} onValueChange={(value) => setValue("modalidade", value)}>
+                  <Select value={watch("modalidade")} onValueChange={(value) => setValue("modalidade", value as "indoor" | "outdoor" | "mista")}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Selecione a modalidade" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="corrida">Corrida</SelectItem>
-                      <SelectItem value="caminhada">Caminhada</SelectItem>
-                      <SelectItem value="ciclismo">Ciclismo</SelectItem>
+                      <SelectItem value="indoor">Indoor</SelectItem>
+                      <SelectItem value="outdoor">Outdoor</SelectItem>
+                      <SelectItem value="mista">Mista</SelectItem>
                     </SelectContent>
                   </Select>
                   {errors.modalidade && (
@@ -415,14 +417,14 @@ const CadastrarCampeonato = () => {
                   <Label htmlFor="formato" className="text-foreground">
                     Formato
                   </Label>
-                  <Select value={watch("formato")} onValueChange={(value) => setValue("formato", value)}>
+                  <Select value={watch("formato")} onValueChange={(value) => setValue("formato", value as "oficial" | "patrocinada" | "personalizado")}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Selecione o formato" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="presencial">Presencial</SelectItem>
-                      <SelectItem value="virtual">Virtual</SelectItem>
-                      <SelectItem value="hibrido">Híbrido</SelectItem>
+                      <SelectItem value="oficial">Oficial</SelectItem>
+                      <SelectItem value="patrocinada">Patrocinada</SelectItem>
+                      <SelectItem value="personalizado">Personalizado</SelectItem>
                     </SelectContent>
                   </Select>
                   {errors.formato && (
@@ -430,6 +432,21 @@ const CadastrarCampeonato = () => {
                   )}
                 </div>
               </div>
+
+              {/* Observações do formato (apenas para Personalizado) */}
+              {watch("formato") === "personalizado" && (
+                <div>
+                  <Label htmlFor="formatoObservacoes" className="text-foreground">
+                    Observações do formato
+                  </Label>
+                  <Textarea
+                    id="formatoObservacoes"
+                    {...register("formatoObservacoes")}
+                    placeholder="Descreva os detalhes do formato personalizado..."
+                    className="mt-2 min-h-[100px]"
+                  />
+                </div>
+              )}
 
               {/* Banners */}
               <div className="grid grid-cols-2 gap-4">

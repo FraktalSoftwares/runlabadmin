@@ -1,35 +1,41 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+export type PartnersFilterValues = {
+  status: string;
+  type: string;
+};
 
 interface PartnersFilterDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  filters: PartnersFilterValues;
+  onApply: (filters: PartnersFilterValues) => void;
 }
 
-export const PartnersFilterDialog = ({ open, onOpenChange }: PartnersFilterDialogProps) => {
-  const [status, setStatus] = useState("");
-  const [type, setType] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [inscriptions, setInscriptions] = useState("");
-  const [customInscriptions, setCustomInscriptions] = useState("");
+export const PartnersFilterDialog = ({ open, onOpenChange, filters, onApply }: PartnersFilterDialogProps) => {
+  const [status, setStatus] = useState(filters.status);
+  const [type, setType] = useState(filters.type);
+
+  useEffect(() => {
+    if (open) {
+      setStatus(filters.status);
+      setType(filters.type);
+    }
+  }, [open, filters.status, filters.type]);
 
   const handleApplyFilters = () => {
-    // Implementar lógica de filtros aqui
-    console.log({ status, type, city, state, inscriptions, customInscriptions });
+    onApply({ status, type });
     onOpenChange(false);
   };
 
   const handleClearFilters = () => {
     setStatus("");
     setType("");
-    setCity("");
-    setState("");
-    setInscriptions("");
-    setCustomInscriptions("");
+    onApply({ status: "", type: "" });
+    onOpenChange(false);
   };
 
   return (
@@ -84,58 +90,6 @@ export const PartnersFilterDialog = ({ open, onOpenChange }: PartnersFilterDialo
                 </Button>
               ))}
             </div>
-          </div>
-
-          {/* Localização */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-sm font-medium text-foreground mb-2 block">Cidade</Label>
-                <Input
-                  placeholder="Ex: São Paulo"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  className="bg-input border-border text-foreground placeholder:text-muted-foreground transition-all hover:border-primary"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-foreground mb-2 block">Estado</Label>
-                <Input
-                  placeholder="Ex: SP"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  className="bg-input border-border text-foreground placeholder:text-muted-foreground transition-all hover:border-primary"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Quantidade de inscrições totais */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-foreground">Quantidade de inscrições totais</Label>
-            <div className="flex flex-wrap gap-2">
-              {["0 inscrições", "1-50 inscrições", "+50 inscrições", "Outro"].map((inscriptionOption) => (
-                <Button
-                  key={inscriptionOption}
-                  variant={inscriptions === inscriptionOption ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setInscriptions(inscriptions === inscriptionOption ? "" : inscriptionOption)}
-                  className={
-                    inscriptions === inscriptionOption
-                      ? "bg-success text-success-foreground"
-                      : "bg-[#1A1A1A] text-foreground border-0"
-                  }
-                >
-                  {inscriptionOption}
-                </Button>
-              ))}
-            </div>
-            <Input
-              placeholder="Insira outra quantidade"
-              value={customInscriptions}
-              onChange={(e) => setCustomInscriptions(e.target.value)}
-              className="bg-input border-border text-foreground placeholder:text-muted-foreground transition-all hover:border-primary"
-            />
           </div>
         </div>
 

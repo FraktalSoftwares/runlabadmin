@@ -19,7 +19,6 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
   const [formato, setFormato] = useState<string>("presencial");
   const [campeonato, setCampeonato] = useState<string>("");
   const [modalidade, setModalidade] = useState<string>("");
-  const [customModalidade, setCustomModalidade] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -37,7 +36,7 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
       status: status || undefined,
       periodo: periodo || undefined,
       tipo: tipo || undefined,
-      modalidade: modalidade === "outra" && customModalidade ? undefined : (modalidade || undefined),
+      modalidade: modalidade || undefined,
     });
     toast({
       title: "Filtros aplicados",
@@ -258,18 +257,7 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
           {/* Modalidade */}
           <div>
             <h3 className="text-sm font-medium text-foreground mb-3">Modalidade</h3>
-            <div className="flex flex-wrap gap-2 mb-2">
-              <Button
-                variant="ghost"
-                onClick={() => setModalidade("trail")}
-                className={`${
-                  modalidade === "trail"
-                    ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
-                    : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
-                }`}
-              >
-                Trail Running
-              </Button>
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="ghost"
                 onClick={() => setModalidade("indoor")}
@@ -294,34 +282,15 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
               </Button>
               <Button
                 variant="ghost"
-                onClick={() => setModalidade("corrida")}
+                onClick={() => setModalidade("mista")}
                 className={`${
-                  modalidade === "corrida"
+                  modalidade === "mista"
                     ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
                     : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
                 }`}
               >
-                Corrida de rua
+                Mista
               </Button>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => setModalidade("outra")}
-                className={`${
-                  modalidade === "outra"
-                    ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
-                    : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
-                }`}
-              >
-                Outra
-              </Button>
-              <Input
-                placeholder="Insira outra modalidade"
-                value={customModalidade}
-                onChange={(e) => setCustomModalidade(e.target.value)}
-                className="flex-1 bg-[#2A2A2A] border-0 text-foreground placeholder:text-muted-foreground"
-              />
             </div>
           </div>
         </div>

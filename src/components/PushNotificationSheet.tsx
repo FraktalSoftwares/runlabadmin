@@ -16,9 +16,12 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { Loader2 } from "lucide-react";
 
+type TargetAudience = "Corredor" | "Parceiro";
+
 interface PushNotificationSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  targetAudience?: TargetAudience;
 }
 
 /** Converte DD/MM/AAAA e HH:MM para ISO (assume timezone local) */
@@ -35,7 +38,7 @@ function toScheduledAt(dateStr: string, timeStr: string): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-export const PushNotificationSheet = ({ open, onOpenChange }: PushNotificationSheetProps) => {
+export const PushNotificationSheet = ({ open, onOpenChange, targetAudience = "Corredor" }: PushNotificationSheetProps) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [sendType, setSendType] = useState<"immediate" | "scheduled">("immediate");
@@ -92,14 +95,16 @@ export const PushNotificationSheet = ({ open, onOpenChange }: PushNotificationSh
         description: description.trim() || null,
         send_type: sendType,
         scheduled_at,
+        target_audience: targetAudience,
       });
 
       if (error) throw error;
 
+      const audienceLabel = targetAudience === "Parceiro" ? "parceiros" : "corredores";
       toast.success(
         sendType === "immediate"
-          ? "Notificação na fila. Será enviada a todos os corredores em breve."
-          : "Notificação agendada. Será enviada a todos os corredores na data e hora escolhidas."
+          ? `Notificação na fila. Será enviada a todos os ${audienceLabel} em breve.`
+          : `Notificação agendada. Será enviada a todos os ${audienceLabel} na data e hora escolhidas.`
       );
       onOpenChange(false);
       resetForm();

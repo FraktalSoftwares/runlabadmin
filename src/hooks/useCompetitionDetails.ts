@@ -44,12 +44,16 @@ export type CompetitionDetail = {
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   mode: string;
+  formatType: string;
+  formatObservations: string | null;
   status: string;
   isFree: boolean;
   coverImageUrl: string | null;
   description: string | null;
   prizeDescription: string | null;
   championshipId: string | null;
+  unlimitedAttempts: boolean;
+  maxRegistrations: number | null;
   distances: CompetitionDistance[];
   lots: CompetitionLot[];
   documents: CompetitionDocument[];
@@ -265,12 +269,16 @@ export function useCompetitionDetails(id: string | undefined) {
         registrationStartsAt: comp.registration_starts_at,
         registrationEndsAt: comp.registration_ends_at,
         mode: comp.mode,
+        formatType: comp.format_type ?? "oficial",
+        formatObservations: comp.format_observations ?? null,
         status: comp.status,
         isFree: comp.is_free,
         coverImageUrl: comp.cover_image_url,
         description: comp.description,
         prizeDescription: comp.prize_description,
         championshipId: comp.championship_id,
+        unlimitedAttempts: comp.unlimited_attempts ?? true,
+        maxRegistrations: comp.max_registrations ?? null,
         distances: (distances || []).map((d) => ({
           id: d.id,
           label: d.label,

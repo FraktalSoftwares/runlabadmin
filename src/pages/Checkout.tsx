@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   CreditCard,
@@ -7,6 +7,10 @@ import {
   Printer,
   ChevronDown,
   Timer,
+  Tag,
+  X,
+  Loader2,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,6 +65,83 @@ const Checkout = () => {
     bairro: "",
     complemento: "",
   });
+
+  // Coupon / advisor code
+  const [couponCode, setCouponCode] = useState("");
+  const [couponInput, setCouponInput] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponValid, setCouponValid] = useState<boolean | null>(null);
+  const [couponPartnerUserId, setCouponPartnerUserId] = useState<string | null>(null);
+  const couponDebounce = useRef<ReturnType<typeof setTimeout>>();
+
+  const DISCOUNT_PERCENT = 0.10;
+  const discountActive = couponValid === true && couponCode.length > 0;
+  const discountAmount = discountActive && currentPlan ? currentPlan.price * DISCOUNT_PERCENT : 0;
+  const finalPrice = currentPlan ? currentPlan.price - discountAmount : 0;
+
+  const validateCoupon = useCallback(async (code: string) => {
+    if (!code.trim()) {
+      setCouponValid(null);
+      setCouponCode("");
+      setCouponPartnerUserId(null);
+      return;
+    }
+
+    setCouponLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, referral_code")
+        .eq("referral_code", code.trim().toUpperCase())
+        .eq("is_partner", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) {
+        setCouponValid(false);
+        setCouponCode("");
+        setCouponPartnerUserId(null);
+      } else {
+        setCouponValid(true);
+        setCouponCode(code.trim().toUpperCase());
+        setCouponPartnerUserId(data.id);
+      }
+    } catch {
+      setCouponValid(false);
+      setCouponCode("");
+      setCouponPartnerUserId(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  }, []);
+
+  const handleCouponInputChange = (value: string) => {
+    setCouponInput(value);
+    setCouponValid(null);
+    if (couponDebounce.current) clearTimeout(couponDebounce.current);
+    if (!value.trim()) {
+      setCouponCode("");
+      setCouponPartnerUserId(null);
+      return;
+    }
+    couponDebounce.current = setTimeout(() => validateCoupon(value), 600);
+  };
+
+  const handleClearCoupon = () => {
+    setCouponInput("");
+    setCouponCode("");
+    setCouponValid(null);
+    setCouponPartnerUserId(null);
+    if (couponDebounce.current) clearTimeout(couponDebounce.current);
+  };
+
+  // Pre-fill with the partner referral_code stored in the runner's advisor_code
+  useEffect(() => {
+    if (!profile?.advisor_code || couponInput) return;
+    setCouponInput(profile.advisor_code);
+    validateCoupon(profile.advisor_code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.advisor_code]);
 
   // PIX state
   const [pixData, setPixData] = useState<{
@@ -122,7 +203,9 @@ const Checkout = () => {
               plan: currentPlan?.type,
               paymentMethod,
               paymentId,
-              amount: currentPlan?.price,
+              amount: finalPrice,
+              originalAmount: discountActive ? currentPlan?.price : undefined,
+              advisorCode: discountActive ? couponCode : undefined,
               planName: currentPlan?.name,
               planType: currentPlan?.type === "anual" ? "Assinatura" : "Avulso",
               creditsAmount: currentPlan?.credits_amount,
@@ -148,7 +231,7 @@ const Checkout = () => {
     };
 
     poll();
-  }, [navigate, currentPlan, paymentMethod]);
+  }, [navigate, currentPlan, paymentMethod, finalPrice, discountActive, couponCode]);
 
   if (plansLoading) {
     return (
@@ -242,6 +325,11 @@ const Checkout = () => {
           email: user?.email || "",
           phone: phone.replace(/\D/g, ""),
         },
+        ...(discountActive && {
+          advisorCode: couponCode,
+          advisorUserId: couponPartnerUserId,
+          discountPercent: DISCOUNT_PERCENT,
+        }),
       };
 
       // Add credit card data for card payments
@@ -302,7 +390,9 @@ const Checkout = () => {
             plan: currentPlan.type,
             paymentMethod,
             paymentId: data.paymentId,
-            amount: currentPlan.price,
+            amount: finalPrice,
+            originalAmount: discountActive ? currentPlan.price : undefined,
+            advisorCode: discountActive ? couponCode : undefined,
             planName: currentPlan.name,
             planType: currentPlan.type === "anual" ? "Assinatura" : "Avulso",
             creditsAmount: data.creditsAmount || currentPlan.credits_amount,
@@ -341,6 +431,11 @@ const Checkout = () => {
             cpfCnpj: cpfCnpj.replace(/\D/g, "") || "24971563792",
             email: user?.email || "",
           },
+          ...(discountActive && {
+            advisorCode: couponCode,
+            advisorUserId: couponPartnerUserId,
+            discountPercent: DISCOUNT_PERCENT,
+          }),
         },
       });
 
@@ -376,6 +471,11 @@ const Checkout = () => {
             cpfCnpj: cpfCnpj.replace(/\D/g, "") || "24971563792",
             email: user?.email || "",
           },
+          ...(discountActive && {
+            advisorCode: couponCode,
+            advisorUserId: couponPartnerUserId,
+            discountPercent: DISCOUNT_PERCENT,
+          }),
         },
       });
 
@@ -439,13 +539,77 @@ const Checkout = () => {
       <div className="flex-1 flex flex-col items-center px-4 py-8 md:py-12">
         <div className="w-full max-w-[400px]">
           {/* Plan Summary */}
-          <div className="mb-8">
+          <div className="mb-6">
             <h1 className="text-xl font-medium text-foreground mb-1">
               Método de pagamento
             </h1>
             <p className="text-sm text-muted-foreground">
               {currentPlan.name} — {formatPrice(currentPlan.price)}
             </p>
+          </div>
+
+          {/* Coupon / Advisor Code */}
+          <div className="mb-6">
+            <label className="text-sm font-medium text-[#e0e0e0] block mb-2">
+              Código de indicação
+            </label>
+            <div className="relative">
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
+              <Input
+                value={couponInput}
+                onChange={(e) => handleCouponInputChange(e.target.value)}
+                placeholder="Digite o código do parceiro"
+                className={`h-12 rounded-xl bg-[#1a1a1a] border text-[#e0e0e0] placeholder:text-[#737373] pl-10 pr-10 ${
+                  couponValid === true
+                    ? "border-green-500"
+                    : couponValid === false
+                      ? "border-red-500"
+                      : "border-[#262626]"
+                }`}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {couponLoading ? (
+                  <Loader2 className="w-4 h-4 text-[#737373] animate-spin" />
+                ) : couponValid === true ? (
+                  <button onClick={handleClearCoupon} className="p-0.5">
+                    <X className="w-4 h-4 text-[#b2b2b2] hover:text-[#e0e0e0] transition-colors" />
+                  </button>
+                ) : couponInput ? (
+                  <button onClick={handleClearCoupon} className="p-0.5">
+                    <X className="w-4 h-4 text-[#b2b2b2] hover:text-[#e0e0e0] transition-colors" />
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {couponValid === true && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
+                <p className="text-xs text-green-500">
+                  Cupom aplicado! Desconto de 10% ({formatPrice(discountAmount)})
+                </p>
+              </div>
+            )}
+            {couponValid === false && (
+              <p className="text-xs text-red-400 mt-2">
+                Código inválido. Verifique e tente novamente.
+              </p>
+            )}
+            {discountActive && (
+              <div className="mt-3 bg-[#1a1a1a] border border-[#262626] rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-[#b2b2b2]">Total com desconto</p>
+                  <p className="text-lg font-semibold text-[#CCF725]">
+                    {formatPrice(finalPrice)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-[#737373] line-through">
+                    {formatPrice(currentPlan.price)}
+                  </p>
+                  <p className="text-xs text-green-500">-10%</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Payment Methods */}
@@ -467,6 +631,7 @@ const Checkout = () => {
               <CardForm
                 paymentLabel="Cartão de crédito"
                 planData={currentPlan}
+                effectivePrice={finalPrice}
                 cardName={cardName}
                 setCardName={setCardName}
                 cardNumber={cardNumber}
@@ -504,6 +669,7 @@ const Checkout = () => {
                 <CardForm
                   paymentLabel="Cartão de débito"
                   planData={currentPlan}
+                  effectivePrice={finalPrice}
                   cardName={cardName}
                   setCardName={setCardName}
                   cardNumber={cardNumber}
@@ -711,6 +877,7 @@ function PaymentMethodOption({
 function CardForm({
   paymentLabel,
   planData,
+  effectivePrice,
   cardName,
   setCardName,
   cardNumber,
@@ -734,6 +901,7 @@ function CardForm({
 }: {
   paymentLabel: string;
   planData: Plan;
+  effectivePrice: number;
   cardName: string;
   setCardName: (v: string) => void;
   cardNumber: string;
@@ -808,13 +976,13 @@ function CardForm({
               className="w-full h-12 rounded-xl bg-[#1a1a1a] border border-[#262626] text-[#e0e0e0] px-4 pr-10 text-sm appearance-none focus:outline-none focus:ring-1 focus:ring-[#CCF725]"
             >
               <option value="1">
-                1x de {formatPrice(planData.price)} (parcela única)
+                1x de {formatPrice(effectivePrice)} (parcela única)
               </option>
               {planData.installments_count > 1 &&
                 Array.from({ length: planData.installments_count - 1 }, (_, i) => i + 2).map((n) => (
                   <option key={n} value={String(n)}>
                     {n}x de R${" "}
-                    {(planData.price / n).toFixed(2).replace(".", ",")}
+                    {(effectivePrice / n).toFixed(2).replace(".", ",")}
                   </option>
                 ))}
             </select>

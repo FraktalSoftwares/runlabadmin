@@ -35,9 +35,9 @@ function parseValorToCents(valor: string): number {
 const formSchema = z.object({
   nome: z.string().trim().min(1, "Nome da competição é obrigatório").max(100, "Nome muito longo"),
   descricao: z.string().trim().max(500, "Descrição muito longa"),
-  modalidade: z.string().min(1, "Selecione uma modalidade"),
-  formato: z.string().min(1, "Selecione um formato"),
-  mode: z.enum(["indoor", "outdoor"]).optional(),
+  modalidade: z.enum(["indoor", "outdoor", "mista"], { required_error: "Selecione uma modalidade" }),
+  formato: z.enum(["oficial", "patrocinada", "personalizado"], { required_error: "Selecione um formato" }),
+  formatoObservacoes: z.string().optional(),
   campeonato: z.string().optional(),
   distancia: z.string().min(1, "Selecione ao menos uma distância"),
   outraDistancia: z.string().optional(),
@@ -67,8 +67,9 @@ type FormData = z.infer<typeof formSchema>;
 const defaultFormValues: FormData = {
   nome: "",
   descricao: "",
-  modalidade: "corrida",
-  formato: "presencial",
+  modalidade: "outdoor",
+  formato: "oficial",
+  formatoObservacoes: "",
   campeonato: "",
   distancia: "outro",
   outraDistancia: "",
@@ -126,13 +127,15 @@ const EditarCompeticao = () => {
     const outraDist = firstDistance && firstDistance.label && !/^\d+\s*km$/i.test(firstDistance.label)
       ? firstDistance.label
       : "";
+    const modeValue = (competition.mode === "indoor" || competition.mode === "outdoor" || competition.mode === "mista") ? competition.mode : "outdoor";
+    const formatValue = (competition.formatType === "oficial" || competition.formatType === "patrocinada" || competition.formatType === "personalizado") ? competition.formatType : "oficial";
     form.reset({
       ...defaultFormValues,
       nome: competition.title || "",
       descricao: competition.description ?? "",
-      modalidade: "corrida",
-      formato: "presencial",
-      mode: (competition.mode === "indoor" || competition.mode === "outdoor") ? competition.mode : "outdoor",
+      modalidade: modeValue as "indoor" | "outdoor" | "mista",
+      formato: formatValue as "oficial" | "patrocinada" | "personalizado",
+      formatoObservacoes: competition.formatObservations ?? "",
       campeonato: competition.championshipId ?? "",
       distancia: distValue,
       outraDistancia: outraDist,
@@ -140,9 +143,9 @@ const EditarCompeticao = () => {
       inscricaoFim: competition.registrationEndsAt ? new Date(competition.registrationEndsAt) : undefined,
       competicaoInicio: competition.startsAt ? new Date(competition.startsAt) : undefined,
       competicaoFim: undefined,
-      tentativasIlimitadas: true,
-      numeroMaximoInscritos: false,
-      maxInscritos: "",
+      tentativasIlimitadas: competition.unlimitedAttempts ?? true,
+      numeroMaximoInscritos: competition.maxRegistrations != null,
+      maxInscritos: competition.maxRegistrations != null ? String(competition.maxRegistrations) : "",
       premiacoes: competition.prizeDescription ? "sim" : "nao",
       quantidadeRecompensas: "",
       outraQuantidade: "",
@@ -215,8 +218,17 @@ const EditarCompeticao = () => {
     }
   };
 
-  const handleSave = async (data: FormData) => {
+  const handleSave = async () => {
     if (!id) return;
+
+    const result = formSchema.safeParse(form.getValues());
+    if (!result.success) {
+      const firstMsg = result.error.errors[0]?.message;
+      toast.error(firstMsg || "Preencha todos os campos obrigatórios");
+      return;
+    }
+
+    const data = result.data;
     setIsSaving(true);
     try {
       const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
@@ -236,7 +248,9 @@ const EditarCompeticao = () => {
           starts_at: startsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
-          mode: data.mode ?? "outdoor",
+          mode: data.modalidade ?? "outdoor",
+          format_type: data.formato ?? "oficial",
+          format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,
           is_free: isFree,
           championship_id: championshipId,
           unlimited_attempts: data.tentativasIlimitadas ?? true,
@@ -248,7 +262,6 @@ const EditarCompeticao = () => {
 
       if (updateError) throw updateError;
 
-      // 1) Banner/capa da competição
       if (selectedImage) {
         const ext = selectedImage.name.split(".").pop()?.toLowerCase() || "jpg";
         const path = `competitions/${id}/cover.${ext}`;
@@ -264,14 +277,12 @@ const EditarCompeticao = () => {
         if (urlUpdateError) throw urlUpdateError;
       }
 
-      // 2) Patrocinadores: atualizar apenas a lista de IDs (seleção da tabela competition_sponsors)
       const { error: sponsorsUpdateError } = await supabase
         .from("competitions")
         .update({ competition_sponsors: selectedSponsorIds.length > 0 ? selectedSponsorIds : null })
         .eq("id", id);
       if (sponsorsUpdateError) throw sponsorsUpdateError;
 
-      // Atualizar lotes existentes
       if (competition) {
         const lots = competition.lots;
         if (lots[0] && (data.lote1Nome?.trim() || data.lote1Preco || data.lote1Descricao?.trim())) {
@@ -301,6 +312,7 @@ const EditarCompeticao = () => {
       toast.success("Dados salvos com sucesso!");
       navigate(`/gestao-competicoes/${id}`);
     } catch (e) {
+      console.error("Erro ao salvar competição:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao salvar competição");
     } finally {
       setIsSaving(false);
@@ -344,7 +356,7 @@ const EditarCompeticao = () => {
 
   return <div className="min-h-screen bg-background">
       <Header />
-      <form onSubmit={form.handleSubmit(handleSave)} className="pt-24">
+      <div className="pt-24">
       {/* Action Bar */}
       <div className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-6 py-4">
@@ -354,7 +366,7 @@ const EditarCompeticao = () => {
               Voltar
             </Button>
 
-            <Button type="submit" disabled={isSaving} className="gap-2 border-0 hover:brightness-90 transition-all" style={{
+            <Button type="button" disabled={isSaving} onClick={handleSave} className="gap-2 border-0 hover:brightness-90 transition-all" style={{
             backgroundColor: '#CCF725',
             color: '#1A1A1A'
           }}>
@@ -453,14 +465,14 @@ const EditarCompeticao = () => {
                   <Label htmlFor="modalidade" className="text-sm text-muted-foreground mb-2 block">
                     Modalidade
                   </Label>
-                  <Select value={form.watch("modalidade")} onValueChange={value => form.setValue("modalidade", value)}>
+                  <Select value={form.watch("modalidade")} onValueChange={value => form.setValue("modalidade", value as "indoor" | "outdoor" | "mista", { shouldDirty: true, shouldValidate: true })}>
                     <SelectTrigger className="bg-[#1A1A1A] border-border/30">
                       <SelectValue placeholder="Selecione a modalidade" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1A1A1A] border-border/30">
-                      <SelectItem value="corrida">Corrida</SelectItem>
-                      <SelectItem value="caminhada">Caminhada</SelectItem>
-                      <SelectItem value="ciclismo">Ciclismo</SelectItem>
+                      <SelectItem value="indoor">Indoor</SelectItem>
+                      <SelectItem value="outdoor">Outdoor</SelectItem>
+                      <SelectItem value="mista">Mista</SelectItem>
                     </SelectContent>
                   </Select>
                   {form.formState.errors.modalidade && <p className="text-sm text-destructive mt-1">{form.formState.errors.modalidade.message}</p>}
@@ -470,19 +482,34 @@ const EditarCompeticao = () => {
                   <Label htmlFor="formato" className="text-sm text-muted-foreground mb-2 block">
                     Formato
                   </Label>
-                  <Select value={form.watch("formato")} onValueChange={value => form.setValue("formato", value)}>
+                  <Select value={form.watch("formato")} onValueChange={value => form.setValue("formato", value as "oficial" | "patrocinada" | "personalizado", { shouldDirty: true, shouldValidate: true })}>
                     <SelectTrigger className="bg-[#1A1A1A] border-border/30">
                       <SelectValue placeholder="Selecione o formato" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1A1A1A] border-border/30">
-                      <SelectItem value="presencial">Presencial</SelectItem>
-                      <SelectItem value="virtual">Virtual</SelectItem>
-                      <SelectItem value="hibrido">Híbrido</SelectItem>
+                      <SelectItem value="oficial">Oficial</SelectItem>
+                      <SelectItem value="patrocinada">Patrocinada</SelectItem>
+                      <SelectItem value="personalizado">Personalizado</SelectItem>
                     </SelectContent>
                   </Select>
                   {form.formState.errors.formato && <p className="text-sm text-destructive mt-1">{form.formState.errors.formato.message}</p>}
                 </div>
               </div>
+
+              {/* Observações do formato (apenas para Personalizado) */}
+              {form.watch("formato") === "personalizado" && (
+                <div className="mb-6">
+                  <Label htmlFor="formatoObservacoes" className="text-sm text-muted-foreground mb-2 block">
+                    Observações do formato
+                  </Label>
+                  <Textarea
+                    id="formatoObservacoes"
+                    {...form.register("formatoObservacoes")}
+                    placeholder="Descreva os detalhes do formato personalizado..."
+                    className="bg-[#1A1A1A] border-border/30 min-h-[100px] resize-none"
+                  />
+                </div>
+              )}
 
               {/* Vincular campeonato */}
               <div className="mb-6">
@@ -492,7 +519,7 @@ const EditarCompeticao = () => {
                   </Label>
                   <span className="text-xs text-muted-foreground">(opcional)</span>
                 </div>
-                <Select value={form.watch("campeonato")} onValueChange={value => form.setValue("campeonato", value)}>
+                <Select value={form.watch("campeonato")} onValueChange={value => form.setValue("campeonato", value, { shouldDirty: true, shouldValidate: true })}>
                   <SelectTrigger className="bg-[#1A1A1A] border-border/30">
                     <SelectValue placeholder="Selecione o campeonato a ser vinculado" />
                   </SelectTrigger>
@@ -527,7 +554,7 @@ const EditarCompeticao = () => {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 bg-[#1A1A1A] border-border/30" align="start">
-                        <Calendar mode="single" selected={form.watch("inscricaoInicio")} onSelect={date => form.setValue("inscricaoInicio", date)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        <Calendar mode="single" selected={form.watch("inscricaoInicio")} onSelect={date => form.setValue("inscricaoInicio", date, { shouldDirty: true, shouldValidate: true })} initialFocus className={cn("p-3 pointer-events-auto")} />
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -542,7 +569,7 @@ const EditarCompeticao = () => {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 bg-[#1A1A1A] border-border/30" align="start">
-                        <Calendar mode="single" selected={form.watch("inscricaoFim")} onSelect={date => form.setValue("inscricaoFim", date)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        <Calendar mode="single" selected={form.watch("inscricaoFim")} onSelect={date => form.setValue("inscricaoFim", date, { shouldDirty: true, shouldValidate: true })} initialFocus className={cn("p-3 pointer-events-auto")} />
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -565,7 +592,7 @@ const EditarCompeticao = () => {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 bg-[#1A1A1A] border-border/30" align="start">
-                        <Calendar mode="single" selected={form.watch("competicaoInicio")} onSelect={date => form.setValue("competicaoInicio", date)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        <Calendar mode="single" selected={form.watch("competicaoInicio")} onSelect={date => form.setValue("competicaoInicio", date, { shouldDirty: true, shouldValidate: true })} initialFocus className={cn("p-3 pointer-events-auto")} />
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -580,7 +607,7 @@ const EditarCompeticao = () => {
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0 bg-[#1A1A1A] border-border/30" align="start">
-                        <Calendar mode="single" selected={form.watch("competicaoFim")} onSelect={date => form.setValue("competicaoFim", date)} initialFocus className={cn("p-3 pointer-events-auto")} />
+                        <Calendar mode="single" selected={form.watch("competicaoFim")} onSelect={date => form.setValue("competicaoFim", date, { shouldDirty: true, shouldValidate: true })} initialFocus className={cn("p-3 pointer-events-auto")} />
                       </PopoverContent>
                     </Popover>
                   </div>
@@ -601,7 +628,7 @@ const EditarCompeticao = () => {
                   id="tentativasIlimitadas"
                   checked={form.watch("tentativasIlimitadas") || false}
                   onCheckedChange={(checked) =>
-                    form.setValue("tentativasIlimitadas", checked as boolean)
+                    form.setValue("tentativasIlimitadas", checked as boolean, { shouldDirty: true })
                   }
                 />
                 <Label
@@ -619,7 +646,7 @@ const EditarCompeticao = () => {
                     id="numeroMaximoInscritos"
                     checked={form.watch("numeroMaximoInscritos") || false}
                     onCheckedChange={(checked) =>
-                      form.setValue("numeroMaximoInscritos", checked as boolean)
+                      form.setValue("numeroMaximoInscritos", checked as boolean, { shouldDirty: true })
                     }
                   />
                   <Label
@@ -652,7 +679,7 @@ const EditarCompeticao = () => {
               {/* Sim/Não Radio */}
               <RadioGroup
                 value={form.watch("premiacoes")}
-                onValueChange={(value) => form.setValue("premiacoes", value as "sim" | "nao")}
+                onValueChange={(value) => form.setValue("premiacoes", value as "sim" | "nao", { shouldDirty: true })}
                 className="flex gap-6 mb-6"
               >
                 <div className="flex items-center gap-2">
@@ -690,7 +717,7 @@ const EditarCompeticao = () => {
                           ? { backgroundColor: "#CCF725", color: "#1A1A1A" }
                           : {}
                       }
-                      onClick={() => form.setValue("quantidadeRecompensas", "5-5")}
+                      onClick={() => form.setValue("quantidadeRecompensas", "5-5", { shouldDirty: true })}
                     >
                       5-5
                     </Button>
@@ -707,7 +734,7 @@ const EditarCompeticao = () => {
                           ? { backgroundColor: "#CCF725", color: "#1A1A1A" }
                           : {}
                       }
-                      onClick={() => form.setValue("quantidadeRecompensas", "6-10")}
+                      onClick={() => form.setValue("quantidadeRecompensas", "6-10", { shouldDirty: true })}
                     >
                       6-10
                     </Button>
@@ -724,7 +751,7 @@ const EditarCompeticao = () => {
                           ? { backgroundColor: "#CCF725", color: "#1A1A1A" }
                           : {}
                       }
-                      onClick={() => form.setValue("quantidadeRecompensas", "11-20")}
+                      onClick={() => form.setValue("quantidadeRecompensas", "11-20", { shouldDirty: true })}
                     >
                       11-20
                     </Button>
@@ -741,7 +768,7 @@ const EditarCompeticao = () => {
                           ? { backgroundColor: "#CCF725", color: "#1A1A1A" }
                           : {}
                       }
-                      onClick={() => form.setValue("quantidadeRecompensas", "outro")}
+                      onClick={() => form.setValue("quantidadeRecompensas", "outro", { shouldDirty: true })}
                     >
                       Outro
                     </Button>
@@ -773,7 +800,7 @@ const EditarCompeticao = () => {
                 </Label>
                 <RadioGroup
                   value={form.watch("possuiKit")}
-                  onValueChange={(value) => form.setValue("possuiKit", value as "sim" | "nao")}
+                  onValueChange={(value) => form.setValue("possuiKit", value as "sim" | "nao", { shouldDirty: true })}
                   className="flex gap-6"
                 >
                   <div className="flex items-center gap-2">
@@ -798,7 +825,7 @@ const EditarCompeticao = () => {
                 </Label>
                 <Select
                   value={form.watch("tipoCompeticao")}
-                  onValueChange={(value) => form.setValue("tipoCompeticao", value)}
+                  onValueChange={(value) => form.setValue("tipoCompeticao", value, { shouldDirty: true })}
                 >
                   <SelectTrigger className="bg-[#1A1A1A] border-border/30">
                     <SelectValue placeholder="Selecione: Gratuita ou Paga" />
@@ -836,7 +863,7 @@ const EditarCompeticao = () => {
                     id="lote1Creditos"
                     checked={form.watch("lote1CreditosAssinatura") || false}
                     onCheckedChange={(checked) =>
-                      form.setValue("lote1CreditosAssinatura", checked as boolean)
+                      form.setValue("lote1CreditosAssinatura", checked as boolean, { shouldDirty: true })
                     }
                   />
                   <Label
@@ -874,7 +901,7 @@ const EditarCompeticao = () => {
                     id="lote2Creditos"
                     checked={form.watch("lote2CreditosAssinatura") || false}
                     onCheckedChange={(checked) =>
-                      form.setValue("lote2CreditosAssinatura", checked as boolean)
+                      form.setValue("lote2CreditosAssinatura", checked as boolean, { shouldDirty: true })
                     }
                   />
                   <Label
@@ -1097,8 +1124,9 @@ const EditarCompeticao = () => {
           {/* Save Button */}
           <div className="mt-5 flex justify-end">
             <Button 
-              type="submit" 
+              type="button" 
               disabled={isSaving}
+              onClick={handleSave}
               className="gap-2 border-0 hover:brightness-90 transition-all px-8 py-3" 
               style={{
                 backgroundColor: '#CCF725',
@@ -1111,7 +1139,7 @@ const EditarCompeticao = () => {
           </div>
         </div>
       </main>
-    </form>
+    </div>
     </div>;
 };
 export default EditarCompeticao;

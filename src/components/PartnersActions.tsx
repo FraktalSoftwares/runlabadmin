@@ -1,19 +1,46 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, SlidersHorizontal, Download, Send, Plus } from "lucide-react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { ExportDialog } from "./ExportDialog";
-import { PartnersFilterDialog } from "./PartnersFilterDialog";
+import { PartnersFilterDialog, type PartnersFilterValues } from "./PartnersFilterDialog";
 import { PushNotificationSheet } from "./PushNotificationSheet";
 import { RegisterPartnerSheet } from "./RegisterPartnerSheet";
+import { downloadParceirosCsv } from "@/lib/exportFinanceiroCsv";
+import { toast } from "@/hooks/use-toast";
+import type { PartnerRow } from "@/hooks/usePartners";
 
-export const PartnersActions = () => {
+type PartnersActionsProps = {
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  partners: PartnerRow[];
+  filters: PartnersFilterValues;
+  onFiltersChange: (filters: PartnersFilterValues) => void;
+};
+
+export const PartnersActions = ({ search = "", onSearchChange, partners, filters, onFiltersChange }: PartnersActionsProps) => {
   const { hasPermission } = usePermissions();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isPushOpen, setIsPushOpen] = useState(false);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      downloadParceirosCsv(partners);
+      toast({ title: "Exportação concluída", description: "O CSV de parceiros foi baixado." });
+      setIsExportOpen(false);
+    } catch {
+      toast({ title: "Erro ao exportar", variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  }, [partners]);
+
+  const activeFilterCount = (filters.status ? 1 : 0) + (filters.type ? 1 : 0);
 
   return (
     <>
@@ -23,6 +50,8 @@ export const PartnersActions = () => {
           <Input
             placeholder="Buscar parceiro..."
             className="pl-10 bg-input border-border text-foreground"
+            value={search}
+            onChange={(e) => onSearchChange?.(e.target.value)}
           />
         </div>
         
@@ -33,6 +62,11 @@ export const PartnersActions = () => {
           >
             <SlidersHorizontal className="h-4 w-4" />
             Filtrar
+            {activeFilterCount > 0 && (
+              <span className="ml-1.5 inline-flex items-center justify-center h-5 w-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                {activeFilterCount}
+              </span>
+            )}
           </Button>
           
           <Button 
@@ -66,9 +100,9 @@ export const PartnersActions = () => {
         </div>
       </div>
 
-      <ExportDialog open={isExportOpen} onOpenChange={setIsExportOpen} />
-      <PartnersFilterDialog open={isFilterOpen} onOpenChange={setIsFilterOpen} />
-      <PushNotificationSheet open={isPushOpen} onOpenChange={setIsPushOpen} />
+      <ExportDialog open={isExportOpen} onOpenChange={setIsExportOpen} onExport={handleExport} exporting={exporting} />
+      <PartnersFilterDialog open={isFilterOpen} onOpenChange={setIsFilterOpen} filters={filters} onApply={onFiltersChange} />
+      <PushNotificationSheet open={isPushOpen} onOpenChange={setIsPushOpen} targetAudience="Parceiro" />
       <RegisterPartnerSheet open={isRegisterOpen} onOpenChange={setIsRegisterOpen} />
     </>
   );

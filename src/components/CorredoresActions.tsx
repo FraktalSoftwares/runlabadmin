@@ -90,7 +90,7 @@ export const CorredoresActions = () => {
         exporting={exporting}
       />
       <CorredoresFilterDialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen} />
-      <PushNotificationSheet open={pushSheetOpen} onOpenChange={setPushSheetOpen} />
+      <PushNotificationSheet open={pushSheetOpen} onOpenChange={setPushSheetOpen} targetAudience="Corredor" />
     </>
   );
 };

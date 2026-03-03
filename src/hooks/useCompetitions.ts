@@ -87,14 +87,14 @@ function periodToDate(periodo: string | undefined): string | null {
 async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): Promise<CompetitionRow[]> {
   let query = supabase
     .from("competitions")
-    .select("id, title, subtitle, mode, status, is_free, starts_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at")
+    .select("id, title, subtitle, mode, format_type, status, is_free, starts_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at")
     .order("created_at", { ascending: false });
 
   const dbStatus = statusToDb(filters.status);
   if (dbStatus) query = query.eq("status", dbStatus);
   if (filters.tipo === "gratuita") query = query.eq("is_free", true);
   if (filters.tipo === "paga") query = query.eq("is_free", false);
-  const modeDb = filters.modalidade === "indoor" ? "indoor" : filters.modalidade === "outdoor" || filters.modalidade === "trail" || filters.modalidade === "corrida" ? "outdoor" : null;
+  const modeDb = (filters.modalidade === "indoor" || filters.modalidade === "outdoor" || filters.modalidade === "mista") ? filters.modalidade : null;
   if (modeDb) query = query.eq("mode", modeDb);
   const periodFrom = periodToDate(filters.periodo);
   if (periodFrom) query = query.gte("created_at", periodFrom);
@@ -116,15 +116,33 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
     });
   }
 
+  const modeLabel = (mode: string | null): string => {
+    switch (mode) {
+      case "indoor": return "Indoor";
+      case "outdoor": return "Outdoor";
+      case "mista": return "Mista";
+      default: return "Outdoor";
+    }
+  };
+
+  const formatLabel = (ft: string | null): string => {
+    switch (ft) {
+      case "oficial": return "Oficial";
+      case "patrocinada": return "Patrocinada";
+      case "personalizado": return "Personalizado";
+      default: return "Oficial";
+    }
+  };
+
   return (competitions ?? []).map((c) => ({
     id: c.id,
     nome: c.title ?? "-",
-    modalidade: c.mode === "outdoor" ? "Outdoor" : "Indoor",
+    modalidade: modeLabel(c.mode),
     prazoInscricoes: formatDateRange(c.registration_starts_at, c.registration_ends_at),
     prazoProva: formatSingleDate(c.starts_at),
     inscritos: countsByCompetition[c.id] ?? 0,
     tipo: c.is_free ? "Gratuita" : "Paga",
-    formato: Array.isArray(c.competition_sponsors) && c.competition_sponsors.length > 0 ? "Patrocinada" : "Oficial",
+    formato: formatLabel(c.format_type),
     campeonato: "-",
     status: mapStatus(c.status as DbStatus),
   }));

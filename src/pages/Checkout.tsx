@@ -11,6 +11,9 @@ import {
   X,
   Loader2,
   CheckCircle2,
+  Coins,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,8 +25,24 @@ import logo from "@/assets/runlab-logo.png";
 
 type PaymentMethod = "credito" | "debito" | "pix" | "boleto" | null;
 
-interface LocationState {
+type CheckoutMode = "plan" | "lot";
+
+interface PlanLocationState {
   planId: string;
+}
+
+interface LotLocationState {
+  competitionId: string;
+  lotId: string;
+  lotName: string;
+  priceCents: number;
+  distanceId?: string;
+}
+
+type LocationState = PlanLocationState | LotLocationState;
+
+function isLotState(state: LocationState | null): state is LotLocationState {
+  return state !== null && "lotId" in state;
 }
 
 const BILLING_TYPE_MAP: Record<string, string> = {
@@ -39,9 +58,20 @@ const Checkout = () => {
   const { user, profile, signOut } = useAuth();
   const { plans, loading: plansLoading } = usePlans();
   const state = location.state as LocationState | null;
-  const planId = state?.planId;
 
+  const mode: CheckoutMode = isLotState(state) ? "lot" : "plan";
+  const planId = !isLotState(state) ? (state as PlanLocationState | null)?.planId : undefined;
   const currentPlan: Plan | undefined = plans.find((p) => p.id === planId);
+
+  const lotId = isLotState(state) ? state.lotId : undefined;
+  const lotName = isLotState(state) ? state.lotName : undefined;
+  const lotPriceCents = isLotState(state) ? state.priceCents : undefined;
+  const competitionId = isLotState(state) ? state.competitionId : undefined;
+  const distanceId = isLotState(state) ? state.distanceId : undefined;
+
+  const basePrice = mode === "lot"
+    ? (lotPriceCents ?? 0) / 100
+    : (currentPlan?.price ?? 0);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -74,10 +104,21 @@ const Checkout = () => {
   const [couponPartnerUserId, setCouponPartnerUserId] = useState<string | null>(null);
   const couponDebounce = useRef<ReturnType<typeof setTimeout>>();
 
+  // Runcoins discount
+  const totalRuncoins = profile?.total_runcoins ?? 0;
+  const [useRuncoins, setUseRuncoins] = useState(false);
+  const [runcoinsToUse, setRuncoinsToUse] = useState(0);
+
   const DISCOUNT_PERCENT = 0.10;
   const discountActive = couponValid === true && couponCode.length > 0;
-  const discountAmount = discountActive && currentPlan ? currentPlan.price * DISCOUNT_PERCENT : 0;
-  const finalPrice = currentPlan ? currentPlan.price - discountAmount : 0;
+  const partnerDiscountAmount = discountActive ? basePrice * DISCOUNT_PERCENT : 0;
+  const priceAfterPartner = basePrice - partnerDiscountAmount;
+
+  const maxRuncoinsDiscount = Math.min(totalRuncoins, Math.floor(priceAfterPartner * 100) / 100);
+  const runcoinsDiscountAmount = useRuncoins ? Math.min(runcoinsToUse, maxRuncoinsDiscount) : 0;
+  const finalPrice = Math.max(0, priceAfterPartner - runcoinsDiscountAmount);
+
+  const discountAmount = partnerDiscountAmount;
 
   const validateCoupon = useCallback(async (code: string) => {
     if (!code.trim()) {
@@ -164,10 +205,20 @@ const Checkout = () => {
   const [isPolling, setIsPolling] = useState(false);
 
   useEffect(() => {
-    if (!plansLoading && !planId) {
+    if (mode === "plan" && !plansLoading && !planId) {
       navigate("/corredor/planos", { replace: true });
     }
-  }, [planId, plansLoading, navigate]);
+    if (mode === "lot" && !lotId) {
+      navigate("/corredor/planos", { replace: true });
+    }
+  }, [mode, planId, lotId, plansLoading, navigate]);
+
+  useEffect(() => {
+    if (useRuncoins) {
+      setRuncoinsToUse(Math.min(runcoinsToUse, maxRuncoinsDiscount));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maxRuncoinsDiscount, useRuncoins]);
 
   // PIX countdown timer
   useEffect(() => {
@@ -179,11 +230,42 @@ const Checkout = () => {
     }
   }, [pixData, pixTimer]);
 
+  const buildSuccessState = useCallback((paymentId: string) => {
+    if (mode === "lot") {
+      return {
+        mode: "lot" as const,
+        paymentMethod,
+        paymentId,
+        amount: finalPrice,
+        originalAmount: basePrice,
+        partnerDiscount: partnerDiscountAmount > 0 ? partnerDiscountAmount : undefined,
+        runcoinsDiscount: runcoinsDiscountAmount > 0 ? runcoinsDiscountAmount : undefined,
+        runcoinsUsed: runcoinsDiscountAmount > 0 ? Math.floor(runcoinsDiscountAmount) : undefined,
+        lotName,
+        competitionId,
+        lotId,
+        distanceId,
+      };
+    }
+    return {
+      mode: "plan" as const,
+      plan: currentPlan?.type,
+      paymentMethod,
+      paymentId,
+      amount: finalPrice,
+      originalAmount: discountActive ? currentPlan?.price : undefined,
+      advisorCode: discountActive ? couponCode : undefined,
+      planName: currentPlan?.name,
+      planType: currentPlan?.type === "anual" ? "Assinatura" : "Avulso",
+      creditsAmount: currentPlan?.credits_amount,
+    };
+  }, [mode, paymentMethod, finalPrice, basePrice, partnerDiscountAmount, runcoinsDiscountAmount, lotName, competitionId, lotId, distanceId, currentPlan, discountActive, couponCode]);
+
   // Poll for payment status (PIX/Boleto)
   const pollPaymentStatus = useCallback(async (paymentId: string) => {
     setIsPolling(true);
     let attempts = 0;
-    const maxAttempts = 60; // 5 minutes at 5s intervals
+    const maxAttempts = 60;
 
     const poll = async () => {
       try {
@@ -199,17 +281,7 @@ const Checkout = () => {
         if (data?.confirmed) {
           setIsPolling(false);
           navigate("/corredor/pagamento-confirmado", {
-            state: {
-              plan: currentPlan?.type,
-              paymentMethod,
-              paymentId,
-              amount: finalPrice,
-              originalAmount: discountActive ? currentPlan?.price : undefined,
-              advisorCode: discountActive ? couponCode : undefined,
-              planName: currentPlan?.name,
-              planType: currentPlan?.type === "anual" ? "Assinatura" : "Avulso",
-              creditsAmount: currentPlan?.credits_amount,
-            },
+            state: buildSuccessState(paymentId),
           });
           return;
         }
@@ -231,9 +303,9 @@ const Checkout = () => {
     };
 
     poll();
-  }, [navigate, currentPlan, paymentMethod, finalPrice, discountActive, couponCode]);
+  }, [navigate, buildSuccessState]);
 
-  if (plansLoading) {
+  if (mode === "plan" && plansLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <p className="text-muted-foreground animate-pulse">Carregando...</p>
@@ -241,7 +313,10 @@ const Checkout = () => {
     );
   }
 
-  if (!currentPlan) return null;
+  if (mode === "plan" && !currentPlan) return null;
+  if (mode === "lot" && !lotId) return null;
+
+  const itemName = mode === "lot" ? (lotName ?? "Inscrição") : (currentPlan?.name ?? "");
 
   const formatCardNumber = (value: string) => {
     const numbers = value.replace(/\D/g, "").slice(0, 16);
@@ -288,12 +363,50 @@ const Checkout = () => {
       .replace(/(\d{5})(\d)/, "$1-$2");
   };
 
+  const buildRequestBody = (billingType: string): Record<string, unknown> => {
+    const customer = {
+      name: cardName || profile?.full_name || user?.email?.split("@")[0] || "Corredor",
+      cpfCnpj: cpfCnpj.replace(/\D/g, ""),
+      email: user?.email || "",
+      phone: phone.replace(/\D/g, ""),
+    };
+
+    const discountFields = discountActive
+      ? { advisorCode: couponCode, advisorUserId: couponPartnerUserId, discountPercent: DISCOUNT_PERCENT }
+      : {};
+
+    const runcoinsFields = runcoinsDiscountAmount > 0
+      ? { runcoinsUsed: Math.floor(runcoinsDiscountAmount) }
+      : {};
+
+    if (mode === "lot") {
+      return {
+        lotId,
+        amount: Math.round(finalPrice * 100) / 100,
+        description: lotName ?? "Inscrição em competição",
+        billingType,
+        installmentCount: parseInt(installments) || 1,
+        customer,
+        ...discountFields,
+        ...runcoinsFields,
+      };
+    }
+
+    return {
+      planId: currentPlan!.id,
+      billingType,
+      installmentCount: parseInt(installments) || 1,
+      customer,
+      ...discountFields,
+      ...runcoinsFields,
+    };
+  };
+
   const handleConfirmPayment = async () => {
     if (!paymentMethod) return;
 
     const billingType = BILLING_TYPE_MAP[paymentMethod];
 
-    // Validate card fields
     if (paymentMethod === "credito" || paymentMethod === "debito") {
       if (!cardName || !cardNumber || !cardExpiry || !cardCvv || !cpfCnpj) {
         toast.error("Preencha todos os campos do cartão.");
@@ -308,31 +421,14 @@ const Checkout = () => {
     setIsProcessing(true);
 
     try {
-      // Parse expiry
       const expiryParts = cardExpiry.split("/");
       const expiryMonth = expiryParts[0] || "";
       const expiryYear = expiryParts[1]
         ? (expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1])
         : "";
 
-      const requestBody: Record<string, unknown> = {
-        planId: currentPlan.id,
-        billingType,
-        installmentCount: parseInt(installments) || 1,
-        customer: {
-          name: cardName || profile?.full_name || user?.email?.split("@")[0] || "Corredor",
-          cpfCnpj: cpfCnpj.replace(/\D/g, ""),
-          email: user?.email || "",
-          phone: phone.replace(/\D/g, ""),
-        },
-        ...(discountActive && {
-          advisorCode: couponCode,
-          advisorUserId: couponPartnerUserId,
-          discountPercent: DISCOUNT_PERCENT,
-        }),
-      };
+      const requestBody = buildRequestBody(billingType);
 
-      // Add credit card data for card payments
       if (paymentMethod === "credito" || paymentMethod === "debito") {
         requestBody.creditCard = {
           holderName: cardName,
@@ -364,13 +460,11 @@ const Checkout = () => {
         throw new Error(data.error);
       }
 
-      // Handle response based on billing type
       if (billingType === "PIX" && data.pix) {
         setPixData(data.pix);
         setPixPaymentId(data.paymentId);
         setPixTimer(60);
         setIsProcessing(false);
-        // Start polling for payment confirmation
         pollPaymentStatus(data.paymentId);
         return;
       }
@@ -378,25 +472,13 @@ const Checkout = () => {
       if (billingType === "BOLETO" && data.boleto) {
         setBoletoData(data.boleto);
         setIsProcessing(false);
-        // Start polling (boleto takes longer)
         pollPaymentStatus(data.paymentId);
         return;
       }
 
-      // Card payment - check if confirmed
       if (data.status === "CONFIRMED" || data.status === "RECEIVED") {
         navigate("/corredor/pagamento-confirmado", {
-          state: {
-            plan: currentPlan.type,
-            paymentMethod,
-            paymentId: data.paymentId,
-            amount: finalPrice,
-            originalAmount: discountActive ? currentPlan.price : undefined,
-            advisorCode: discountActive ? couponCode : undefined,
-            planName: currentPlan.name,
-            planType: currentPlan.type === "anual" ? "Assinatura" : "Avulso",
-            creditsAmount: data.creditsAmount || currentPlan.credits_amount,
-          },
+          state: buildSuccessState(data.paymentId),
         });
       } else if (data.status === "PENDING" || data.status === "AWAITING_RISK_ANALYSIS") {
         toast.info("Pagamento em análise. Você será notificado quando for confirmado.");
@@ -422,21 +504,13 @@ const Checkout = () => {
     setIsProcessing(true);
 
     try {
+      const requestBody = buildRequestBody("PIX");
+      if (!requestBody.customer || !(requestBody.customer as Record<string, string>).cpfCnpj) {
+        (requestBody.customer as Record<string, string>).cpfCnpj = "24971563792";
+      }
+
       const { data, error } = await supabase.functions.invoke("asaas-checkout", {
-        body: {
-          planId: currentPlan.id,
-          billingType: "PIX",
-          customer: {
-            name: profile?.full_name || user?.email?.split("@")[0] || "Corredor",
-            cpfCnpj: cpfCnpj.replace(/\D/g, "") || "24971563792",
-            email: user?.email || "",
-          },
-          ...(discountActive && {
-            advisorCode: couponCode,
-            advisorUserId: couponPartnerUserId,
-            discountPercent: DISCOUNT_PERCENT,
-          }),
-        },
+        body: requestBody,
       });
 
       if (error || data?.error) {
@@ -462,21 +536,13 @@ const Checkout = () => {
     setIsProcessing(true);
 
     try {
+      const requestBody = buildRequestBody("BOLETO");
+      if (!requestBody.customer || !(requestBody.customer as Record<string, string>).cpfCnpj) {
+        (requestBody.customer as Record<string, string>).cpfCnpj = "24971563792";
+      }
+
       const { data, error } = await supabase.functions.invoke("asaas-checkout", {
-        body: {
-          planId: currentPlan.id,
-          billingType: "BOLETO",
-          customer: {
-            name: profile?.full_name || user?.email?.split("@")[0] || "Corredor",
-            cpfCnpj: cpfCnpj.replace(/\D/g, "") || "24971563792",
-            email: user?.email || "",
-          },
-          ...(discountActive && {
-            advisorCode: couponCode,
-            advisorUserId: couponPartnerUserId,
-            discountPercent: DISCOUNT_PERCENT,
-          }),
-        },
+        body: requestBody,
       });
 
       if (error || data?.error) {
@@ -538,13 +604,13 @@ const Checkout = () => {
       {/* Content */}
       <div className="flex-1 flex flex-col items-center px-4 py-8 md:py-12">
         <div className="w-full max-w-[400px]">
-          {/* Plan Summary */}
+          {/* Item Summary */}
           <div className="mb-6">
             <h1 className="text-xl font-medium text-foreground mb-1">
               Método de pagamento
             </h1>
             <p className="text-sm text-muted-foreground">
-              {currentPlan.name} — {formatPrice(currentPlan.price)}
+              {itemName} — {formatPrice(basePrice)}
             </p>
           </div>
 
@@ -597,20 +663,131 @@ const Checkout = () => {
             {discountActive && (
               <div className="mt-3 bg-[#1a1a1a] border border-[#262626] rounded-xl p-3 flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-[#b2b2b2]">Total com desconto</p>
+                  <p className="text-xs text-[#b2b2b2]">Valor após indicação</p>
                   <p className="text-lg font-semibold text-[#CCF725]">
-                    {formatPrice(finalPrice)}
+                    {formatPrice(priceAfterPartner)}
                   </p>
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-[#737373] line-through">
-                    {formatPrice(currentPlan.price)}
+                    {formatPrice(basePrice)}
                   </p>
                   <p className="text-xs text-green-500">-10%</p>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Runcoins Discount */}
+          {totalRuncoins > 0 && (
+            <div className="mb-6">
+              <label className="text-sm font-medium text-[#e0e0e0] block mb-2">
+                Desconto com Runcoins
+              </label>
+              <div className="bg-[#1a1a1a] border border-[#262626] rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-[#CCF725]" />
+                    <span className="text-sm text-[#e0e0e0]">
+                      Saldo: {totalRuncoins} {totalRuncoins === 1 ? "Runcoin" : "Runcoins"}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !useRuncoins;
+                      setUseRuncoins(next);
+                      if (next) setRuncoinsToUse(Math.floor(maxRuncoinsDiscount));
+                      else setRuncoinsToUse(0);
+                    }}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${
+                      useRuncoins ? "bg-[#CCF725]" : "bg-[#3a3a3a]"
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        useRuncoins ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {useRuncoins && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setRuncoinsToUse(Math.max(0, runcoinsToUse - 1))}
+                        className="w-8 h-8 rounded-lg bg-[#262626] flex items-center justify-center text-[#e0e0e0] hover:bg-[#333] transition-colors"
+                        disabled={runcoinsToUse <= 0}
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <div className="flex-1">
+                        <input
+                          type="range"
+                          min={0}
+                          max={Math.floor(maxRuncoinsDiscount)}
+                          value={runcoinsToUse}
+                          onChange={(e) => setRuncoinsToUse(Number(e.target.value))}
+                          className="w-full h-1.5 rounded-full appearance-none bg-[#3a3a3a] accent-[#CCF725] cursor-pointer"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setRuncoinsToUse(Math.min(Math.floor(maxRuncoinsDiscount), runcoinsToUse + 1))}
+                        className="w-8 h-8 rounded-lg bg-[#262626] flex items-center justify-center text-[#e0e0e0] hover:bg-[#333] transition-colors"
+                        disabled={runcoinsToUse >= Math.floor(maxRuncoinsDiscount)}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs text-[#b2b2b2]">
+                        Usando {runcoinsToUse} {runcoinsToUse === 1 ? "Runcoin" : "Runcoins"}
+                      </span>
+                      <span className="text-sm font-medium text-[#CCF725]">
+                        −{formatPrice(runcoinsDiscountAmount)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#737373] mt-1">
+                      Saldo após compra: {totalRuncoins - runcoinsToUse} Runcoins
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Order Summary */}
+          {(partnerDiscountAmount > 0 || runcoinsDiscountAmount > 0) && (
+            <div className="mb-6 bg-[#1a1a1a] border border-[#262626] rounded-xl p-4">
+              <p className="text-sm font-medium text-[#e0e0e0] mb-3">Resumo</p>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#b2b2b2]">Preço original</span>
+                  <span className="text-sm text-[#e0e0e0]">{formatPrice(basePrice)}</span>
+                </div>
+                {partnerDiscountAmount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#b2b2b2]">Desc. indicação (10%)</span>
+                    <span className="text-sm text-green-500">−{formatPrice(partnerDiscountAmount)}</span>
+                  </div>
+                )}
+                {runcoinsDiscountAmount > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-[#b2b2b2]">Desc. Runcoins ({runcoinsToUse})</span>
+                    <span className="text-sm text-green-500">−{formatPrice(runcoinsDiscountAmount)}</span>
+                  </div>
+                )}
+                <div className="border-t border-[#262626] pt-2 mt-1 flex items-center justify-between">
+                  <span className="text-sm font-medium text-[#e0e0e0]">Total</span>
+                  <span className="text-lg font-semibold text-[#CCF725]">{formatPrice(finalPrice)}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Payment Methods */}
           <div className="flex flex-col gap-4">
@@ -630,8 +807,8 @@ const Checkout = () => {
             {paymentMethod === "credito" && (
               <CardForm
                 paymentLabel="Cartão de crédito"
-                planData={currentPlan}
                 effectivePrice={finalPrice}
+                maxInstallments={mode === "plan" ? (currentPlan?.installments_count ?? 1) : 1}
                 cardName={cardName}
                 setCardName={setCardName}
                 cardNumber={cardNumber}
@@ -646,7 +823,7 @@ const Checkout = () => {
                 setPhone={(v) => setPhone(formatPhone(v))}
                 installments={installments}
                 setInstallments={setInstallments}
-                showInstallments
+                showInstallments={mode === "plan"}
                 onConfirm={handleConfirmPayment}
               />
             )}
@@ -668,8 +845,8 @@ const Checkout = () => {
               <div className="flex flex-col gap-4 -mt-2">
                 <CardForm
                   paymentLabel="Cartão de débito"
-                  planData={currentPlan}
                   effectivePrice={finalPrice}
+                  maxInstallments={1}
                   cardName={cardName}
                   setCardName={setCardName}
                   cardNumber={cardNumber}
@@ -876,8 +1053,8 @@ function PaymentMethodOption({
 
 function CardForm({
   paymentLabel,
-  planData,
   effectivePrice,
+  maxInstallments,
   cardName,
   setCardName,
   cardNumber,
@@ -900,8 +1077,8 @@ function CardForm({
   formatCep,
 }: {
   paymentLabel: string;
-  planData: Plan;
   effectivePrice: number;
+  maxInstallments: number;
   cardName: string;
   setCardName: (v: string) => void;
   cardNumber: string;
@@ -978,8 +1155,8 @@ function CardForm({
               <option value="1">
                 1x de {formatPrice(effectivePrice)} (parcela única)
               </option>
-              {planData.installments_count > 1 &&
-                Array.from({ length: planData.installments_count - 1 }, (_, i) => i + 2).map((n) => (
+              {maxInstallments > 1 &&
+                Array.from({ length: maxInstallments - 1 }, (_, i) => i + 2).map((n) => (
                   <option key={n} value={String(n)}>
                     {n}x de R${" "}
                     {(effectivePrice / n).toFixed(2).replace(".", ",")}

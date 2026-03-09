@@ -13,12 +13,25 @@ const TIPO_USER_CORREDOR = "Corredor";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { user, profile, profileLoading, loading } = useAuth();
+  const { user, profile, profileLoading, loading, signOut } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showLoginSuccess, setShowLoginSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  // Login com Google: apenas contas já existentes (com perfil). Se não tiver perfil, desloga e avisa.
+  useEffect(() => {
+    if (loading || profileLoading || !user || profile !== null) return;
+    const provider = user.app_metadata?.provider as string | undefined;
+    if (provider === "google") {
+      signOut();
+      toast.error(
+        "Este e-mail não está cadastrado. O login com Google é apenas para contas já existentes. Use e-mail e senha para acessar sua conta."
+      );
+    }
+  }, [user, profile, profileLoading, loading, signOut]);
 
   // Redireciona baseado no tipo de usuário
   useEffect(() => {
@@ -62,9 +75,35 @@ const Login = () => {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Handle Google login logic here
-    console.log("Google login");
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    try {
+      const redirectTo = `${window.location.origin}/`;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+      if (error) {
+        toast.error(error.message || "Erro ao conectar com o Google.");
+        return;
+      }
+      if (data?.url) {
+        window.location.href = data.url;
+        return;
+      }
+      toast.error("Não foi possível iniciar o login com Google.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao conectar com o Google.";
+      toast.error(message);
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleForgotPasswordClick = () => {
@@ -223,10 +262,14 @@ const Login = () => {
                   type="button"
                   variant="outline"
                   onClick={handleGoogleLogin}
+                  disabled={isGoogleLoading}
                   className="w-full"
                   size="lg"
                 >
-                  <svg
+                  {isGoogleLoading ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <svg
                     className="mr-2 h-5 w-5"
                     viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg"
@@ -248,7 +291,8 @@ const Login = () => {
                       fill="#EA4335"
                     />
                   </svg>
-                  Entrar com o Google
+                  )}
+                  {isGoogleLoading ? "Conectando..." : "Entrar com o Google"}
                 </Button>
               </form>
             </>

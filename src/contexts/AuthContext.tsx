@@ -15,6 +15,7 @@ export type Profile = {
   referral_code: string | null;
   referred_by: string | null;
   is_partner: boolean;
+  total_runcoins: number;
   onboarding_completed_at: string | null;
   created_at: string;
   updated_at: string;

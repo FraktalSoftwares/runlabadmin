@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useCorredoresFilters } from "@/contexts/CorredoresFilterContext";
 import type { CorredorFilters } from "@/hooks/useCorredores";
 
@@ -34,8 +34,6 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
   const [customParticipacao, setCustomParticipacao] = useState<string>("");
   const [eParceiro, setEParceiro] = useState(false);
   const [naoEParceiro, setNaoEParceiro] = useState(false);
-  const { toast } = useToast();
-
   useEffect(() => {
     if (open) {
       setPlano(
@@ -98,10 +96,7 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
       participacaoMin: participacaoMinValue,
     };
     setFilters(newFilters);
-    toast({
-      title: "Filtros aplicados",
-      description: "Os filtros foram aplicados com sucesso.",
-    });
+    toast.success("Filtros aplicados", { description: "Os filtros foram aplicados com sucesso." });
     onOpenChange(false);
   };
 
@@ -116,10 +111,7 @@ export const CorredoresFilterDialog = ({ open, onOpenChange }: CorredoresFilterD
     setEParceiro(false);
     setNaoEParceiro(false);
     clearFilters();
-    toast({
-      title: "Filtros limpos",
-      description: "Todos os filtros foram removidos.",
-    });
+    toast.info("Filtros limpos", { description: "Todos os filtros foram removidos." });
   };
 
   return (

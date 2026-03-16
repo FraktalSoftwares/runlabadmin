@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { rejectWithdrawal, type RepasseRow } from "@/hooks/useRepasses";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface RecusarSaqueDialogProps {
   open: boolean;
@@ -29,15 +29,12 @@ export const RecusarSaqueDialog = ({
     setSubmitting(true);
     try {
       await rejectWithdrawal(repasse.id, reason.trim());
-      toast({
-        title: "Solicitação recusada",
-        description: `Saque de ${repasse.nome} foi recusado.`,
-      });
+      toast.success("Solicitação recusada", { description: `Saque de ${repasse.nome} foi recusado.` });
       setReason("");
       onOpenChange(false);
       onDone();
     } catch {
-      toast({ title: "Erro ao recusar", variant: "destructive" });
+      toast.error("Erro ao recusar");
     } finally {
       setSubmitting(false);
     }

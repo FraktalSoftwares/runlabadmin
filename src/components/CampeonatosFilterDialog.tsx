@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface CampeonatosFilterDialogProps {
   open: boolean;
@@ -14,13 +14,8 @@ export const CampeonatosFilterDialog = ({ open, onOpenChange }: CampeonatosFilte
   const [periodo, setPeriodo] = useState<string>("outro");
   const [customPeriodo, setCustomPeriodo] = useState("");
   const [tipoRanking, setTipoRanking] = useState<string>("ranking_etapa");
-  const { toast } = useToast();
-
   const handleApplyFilters = () => {
-    toast({
-      title: "Filtros aplicados",
-      description: "Os filtros foram aplicados com sucesso.",
-    });
+    toast.success("Filtros aplicados", { description: "Os filtros foram aplicados com sucesso." });
     onOpenChange(false);
   };
 
@@ -29,10 +24,7 @@ export const CampeonatosFilterDialog = ({ open, onOpenChange }: CampeonatosFilte
     setPeriodo("");
     setCustomPeriodo("");
     setTipoRanking("");
-    toast({
-      title: "Filtros limpos",
-      description: "Todos os filtros foram removidos.",
-    });
+    toast.info("Filtros limpos", { description: "Todos os filtros foram removidos." });
   };
 
   return (

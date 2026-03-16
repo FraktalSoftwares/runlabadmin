@@ -25,7 +25,7 @@ import * as z from "zod";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
 /* ─── Schema ─── */
@@ -141,7 +141,7 @@ export default function CadastrarCampeonatoForm() {
   const saveChampionship = async (status: "draft" | "published") => {
     const data = form.getValues();
     if (!data.name?.trim()) {
-      toast({ title: "Nome é obrigatório", variant: "destructive" });
+      toast.error("Nome é obrigatório");
       return;
     }
     setIsSubmitting(true);
@@ -202,13 +202,11 @@ export default function CadastrarCampeonatoForm() {
         if (linkError) throw linkError;
       }
 
-      toast({
-        title:
-          status === "draft"
-            ? "Rascunho salvo com sucesso!"
-            : "Campeonato publicado com sucesso!",
-        duration: 3000,
-      });
+      toast.success(
+        status === "draft"
+          ? "Rascunho salvo com sucesso!"
+          : "Campeonato publicado com sucesso!"
+      );
       navigate("/gestao-competicoes");
     } catch (e: unknown) {
       const message =
@@ -217,11 +215,7 @@ export default function CadastrarCampeonatoForm() {
           : typeof (e as { message?: string })?.message === "string"
             ? (e as { message: string }).message
             : "Erro desconhecido ao salvar.";
-      toast({
-        title: "Erro ao salvar campeonato",
-        description: message,
-        variant: "destructive",
-      });
+      toast.error("Erro ao salvar campeonato", { description: message });
     } finally {
       setIsSubmitting(false);
     }

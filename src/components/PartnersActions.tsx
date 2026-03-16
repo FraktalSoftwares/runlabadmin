@@ -8,7 +8,7 @@ import { PartnersFilterDialog, type PartnersFilterValues } from "./PartnersFilte
 import { PushNotificationSheet } from "./PushNotificationSheet";
 import { RegisterPartnerSheet } from "./RegisterPartnerSheet";
 import { downloadParceirosCsv } from "@/lib/exportFinanceiroCsv";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import type { PartnerRow } from "@/hooks/usePartners";
 
 type PartnersActionsProps = {
@@ -31,10 +31,10 @@ export const PartnersActions = ({ search = "", onSearchChange, partners, filters
     setExporting(true);
     try {
       downloadParceirosCsv(partners);
-      toast({ title: "Exportação concluída", description: "O CSV de parceiros foi baixado." });
+      toast.success("Exportação concluída", { description: "O CSV de parceiros foi baixado." });
       setIsExportOpen(false);
     } catch {
-      toast({ title: "Erro ao exportar", variant: "destructive" });
+      toast.error("Erro ao exportar");
     } finally {
       setExporting(false);
     }

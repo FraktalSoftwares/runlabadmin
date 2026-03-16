@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RepasseRow, RepasseStatus } from "@/hooks/useRepasses";
 import { usePartnerCommissions, markWithdrawalAsPaid } from "@/hooks/useRepasses";
 import { supabase } from "@/lib/supabase";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface RepasseDetailsDialogProps {
   open: boolean;
@@ -38,7 +38,7 @@ const isProcessing = (status: RepasseStatus) =>
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
-  toast({ title: "Copiado!", description: text });
+  toast.info("Copiado!", { description: text });
 }
 
 interface PartnerProfile {
@@ -173,15 +173,12 @@ export const RepasseDetailsDialog = ({
     setConfirming(true);
     try {
       await markWithdrawalAsPaid(repasse.id);
-      toast({
-        title: "Pagamento confirmado",
-        description: `Repasse de ${repasse.repassesFormatted} para ${repasse.nome} marcado como pago.`,
-      });
+      toast.success("Pagamento confirmado", { description: `Repasse de ${repasse.repassesFormatted} para ${repasse.nome} marcado como pago.` });
       queryClient.invalidateQueries({ queryKey: ["financeiro-repasses"] });
       queryClient.invalidateQueries({ queryKey: ["pending-withdrawals-count"] });
       onOpenChange(false);
     } catch {
-      toast({ title: "Erro ao confirmar pagamento", variant: "destructive" });
+      toast.error("Erro ao confirmar pagamento");
     } finally {
       setConfirming(false);
     }

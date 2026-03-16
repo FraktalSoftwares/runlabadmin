@@ -29,7 +29,7 @@ import {
 import { useState, useEffect } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Pagination } from "@/components/Pagination";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useCompetitions } from "@/hooks/useCompetitions";
 import type { CompetitionRow } from "@/hooks/useCompetitions";
 import { useCompeticoesFilters } from "@/contexts/CompeticoesFilterContext";
@@ -128,19 +128,10 @@ export const CompeticoesTable = () => {
 
       if (deleteError) throw deleteError;
 
-      toast({
-        title: "Competição excluída",
-        description: `"${selectedItem.nome}" foi excluída com sucesso.`,
-        duration: 3000,
-      });
+      toast.success("Competição excluída", { description: `"${selectedItem.nome}" foi excluída com sucesso.` });
       refetch();
     } catch (e) {
-      toast({
-        title: "Erro ao excluir",
-        description: e instanceof Error ? e.message : "Não foi possível excluir a competição.",
-        variant: "destructive",
-        duration: 5000,
-      });
+      toast.error("Erro ao excluir", { description: e instanceof Error ? e.message : "Não foi possível excluir a competição." });
     } finally {
       setActionLoading(false);
       setDeleteDialogOpen(false);
@@ -163,19 +154,10 @@ export const CompeticoesTable = () => {
       if (updateError) throw updateError;
 
       const actionLabel = dbStatus === "open" ? "ativada" : "desativada";
-      toast({
-        title: `Competição ${actionLabel}`,
-        description: `"${selectedItem.nome}" foi ${actionLabel} com sucesso.`,
-        duration: 3000,
-      });
+      toast.success(`Competição ${actionLabel}`, { description: `"${selectedItem.nome}" foi ${actionLabel} com sucesso.` });
       refetch();
     } catch (e) {
-      toast({
-        title: "Erro ao alterar status",
-        description: e instanceof Error ? e.message : "Não foi possível alterar o status.",
-        variant: "destructive",
-        duration: 5000,
-      });
+      toast.error("Erro ao alterar status", { description: e instanceof Error ? e.message : "Não foi possível alterar o status." });
     } finally {
       setActionLoading(false);
       setToggleDialogOpen(false);
@@ -196,19 +178,10 @@ export const CompeticoesTable = () => {
 
       if (updateError) throw updateError;
 
-      toast({
-        title: "Competição encerrada",
-        description: `"${selectedItem.nome}" foi encerrada manualmente.`,
-        duration: 3000,
-      });
+      toast.success("Competição encerrada", { description: `"${selectedItem.nome}" foi encerrada manualmente.` });
       refetch();
     } catch (e) {
-      toast({
-        title: "Erro ao encerrar",
-        description: e instanceof Error ? e.message : "Não foi possível encerrar a competição.",
-        variant: "destructive",
-        duration: 5000,
-      });
+      toast.error("Erro ao encerrar", { description: e instanceof Error ? e.message : "Não foi possível encerrar a competição." });
     } finally {
       setActionLoading(false);
       setCloseDialogOpen(false);

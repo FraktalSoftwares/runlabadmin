@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useCompeticoesFilters } from "@/contexts/CompeticoesFilterContext";
 
 interface FilterDialogProps {
@@ -19,8 +19,6 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
   const [formato, setFormato] = useState<string>("presencial");
   const [campeonato, setCampeonato] = useState<string>("");
   const [modalidade, setModalidade] = useState<string>("");
-  const { toast } = useToast();
-
   useEffect(() => {
     if (open) {
       setStatus(contextFilters.status ?? "");
@@ -38,10 +36,7 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
       tipo: tipo || undefined,
       modalidade: modalidade || undefined,
     });
-    toast({
-      title: "Filtros aplicados",
-      description: "Os filtros foram aplicados com sucesso.",
-    });
+    toast.success("Filtros aplicados", { description: "Os filtros foram aplicados com sucesso." });
     onOpenChange(false);
   };
 
@@ -55,10 +50,7 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
     setModalidade("");
     setCustomModalidade("");
     clearFilters();
-    toast({
-      title: "Filtros limpos",
-      description: "Todos os filtros foram removidos.",
-    });
+    toast.info("Filtros limpos", { description: "Todos os filtros foram removidos." });
     onOpenChange(false);
   };
 

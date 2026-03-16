@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { useCompeticoesFilters } from "@/contexts/CompeticoesFilterContext";
 import { downloadCompetitionsCsv } from "@/lib/exportCompetitionsCsv";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export const CompeticoesActions = () => {
   const navigate = useNavigate();
@@ -32,15 +32,9 @@ export const CompeticoesActions = () => {
   const handleExport = async () => {
     try {
       await downloadCompetitionsCsv(filters);
-      toast({
-        title: "Exportação concluída",
-        description: "O CSV foi baixado com a lista de competições.",
-      });
+      toast.success("Exportação concluída", { description: "O CSV foi baixado com a lista de competições." });
     } catch {
-      toast({
-        title: "Erro ao exportar",
-        variant: "destructive",
-      });
+      toast.error("Erro ao exportar");
     }
   };
 

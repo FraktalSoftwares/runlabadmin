@@ -316,7 +316,7 @@ export async function fetchPartnerCommissions(
   if (!commissions?.length) return [];
 
   const paymentIds = [...new Set(commissions.map((c) => c.payment_id).filter(Boolean))];
-  let descriptionByPayment: Record<string, string> = {};
+  const descriptionByPayment: Record<string, string> = {};
 
   if (paymentIds.length > 0) {
     const { data: payments } = await supabase

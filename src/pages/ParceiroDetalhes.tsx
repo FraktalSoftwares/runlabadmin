@@ -7,13 +7,12 @@ import { ChevronRight, X, ChevronLeft, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CorredorProfileDialog } from "@/components/CorredorProfileDialog";
 import { InativarParceiroDialog } from "@/components/InativarParceiroDialog";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useParceiroDetails } from "@/hooks/useParceiroDetails";
 import { supabase } from "@/lib/supabase";
 
 const ParceiroDetalhes = () => {
   const { id } = useParams();
-  const { toast } = useToast();
   const { data: parceiro, loading, error, refetch } = useParceiroDetails(id);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [isInativarDialogOpen, setIsInativarDialogOpen] = useState(false);
@@ -328,18 +327,11 @@ const ParceiroDetalhes = () => {
               .update({ status: "inactive" })
               .eq("user_id", parceiro.id);
 
-            toast({
-              title: "Parceiro inativado",
-              description: `${parceiro.name} foi inativado com sucesso.`,
-            });
+            toast.success("Parceiro inativado", { description: `${parceiro.name} foi inativado com sucesso.` });
             setIsInativarDialogOpen(false);
             refetch();
           } catch (e) {
-            toast({
-              title: "Erro ao inativar",
-              description: e instanceof Error ? e.message : "Não foi possível inativar o parceiro.",
-              variant: "destructive",
-            });
+            toast.error("Erro ao inativar", { description: e instanceof Error ? e.message : "Não foi possível inativar o parceiro." });
           }
         }}
       />

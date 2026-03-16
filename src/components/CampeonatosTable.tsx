@@ -27,7 +27,7 @@ import {
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { Pagination } from "@/components/Pagination";
 import { useCampeonatos } from "@/hooks/useCampeonatos";
 import type { CampeonatoRow } from "@/hooks/useCampeonatos";
@@ -54,16 +54,10 @@ export const CampeonatosTable = () => {
     try {
       const { error: deleteError } = await supabase.from("championships").delete().eq("id", selectedItem.id);
       if (deleteError) throw deleteError;
-      toast({
-        title: "Campeonato excluído com sucesso!",
-        duration: 3000,
-      });
+      toast.success("Campeonato excluído com sucesso!");
       refetch();
     } catch {
-      toast({
-        title: "Erro ao excluir campeonato",
-        variant: "destructive",
-      });
+      toast.error("Erro ao excluir campeonato");
     }
     setDeleteDialogOpen(false);
     setSelectedItem(null);

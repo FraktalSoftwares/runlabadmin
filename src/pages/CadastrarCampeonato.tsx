@@ -17,7 +17,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
 const formSchema = z.object({
@@ -122,7 +122,7 @@ const CadastrarCampeonato = () => {
       const { data, error } = await supabase.from("championships").select("id, name").order("name");
       if (error) {
         console.error("Erro ao carregar campeonatos:", error);
-        toast({ title: "Não foi possível carregar os campeonatos", variant: "destructive" });
+        toast.error("Não foi possível carregar os campeonatos");
       }
       setChampionships((data ?? []) as ChampionshipOption[]);
       setChampionshipsLoading(false);
@@ -166,14 +166,14 @@ const CadastrarCampeonato = () => {
   const saveCompetition = async (status: "draft" | "open") => {
     const data = form.getValues();
     if (!data.nome?.trim()) {
-      toast({ title: "Nome é obrigatório", variant: "destructive" });
+      toast.error("Nome é obrigatório");
       return;
     }
     const hasDistance =
       selectedDistances.some((d) => d !== "outro" && DISTANCE_METERS[d]) ||
       (selectedDistances.includes("outro") && outraDistancia.trim() && !Number.isNaN(parseFloat(outraDistancia.replace(",", "."))));
     if (!hasDistance) {
-      toast({ title: "Selecione ao menos uma distância", variant: "destructive" });
+      toast.error("Selecione ao menos uma distância");
       return;
     }
     setIsSubmitting(true);
@@ -239,7 +239,7 @@ const CadastrarCampeonato = () => {
           .from("sistema")
           .upload(path, bannerFile, { upsert: true, contentType: contentType(bannerFile) });
         if (uploadError) {
-          toast({ title: "Erro ao enviar banner da competição", description: uploadError.message, variant: "destructive" });
+          toast.error("Erro ao enviar banner da competição", { description: uploadError.message });
           throw new Error(`Banner: ${uploadError.message}`);
         }
         const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
@@ -253,7 +253,7 @@ const CadastrarCampeonato = () => {
           .from("sistema")
           .upload(path, miniBannerFile, { upsert: true, contentType: contentType(miniBannerFile) });
         if (uploadError) {
-          toast({ title: "Erro ao enviar mini banner", description: uploadError.message, variant: "destructive" });
+          toast.error("Erro ao enviar mini banner", { description: uploadError.message });
           throw new Error(`Mini banner: ${uploadError.message}`);
         }
         const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
@@ -266,7 +266,7 @@ const CadastrarCampeonato = () => {
         if (thumbnailUrl !== null) updatePayload.thumbnail_url = thumbnailUrl;
         const { error: updateError } = await supabase.from("competitions").update(updatePayload).eq("id", competitionId);
         if (updateError) {
-          toast({ title: "Erro ao salvar URLs dos banners", description: updateError.message, variant: "destructive" });
+          toast.error("Erro ao salvar URLs dos banners", { description: updateError.message });
           throw new Error(`Salvar URLs dos banners: ${updateError.message}`);
         }
       }
@@ -304,17 +304,10 @@ const CadastrarCampeonato = () => {
         if (lotError) throw lotError;
       }
 
-      toast({
-        title: status === "draft" ? "Rascunho salvo!" : "Competição publicada!",
-        duration: 3000,
-      });
+      toast.success(status === "draft" ? "Rascunho salvo!" : "Competição publicada!");
       navigate("/gestao-competicoes");
     } catch (e) {
-      toast({
-        title: "Erro ao salvar competição",
-        description: e instanceof Error ? e.message : undefined,
-        variant: "destructive",
-      });
+      toast.error("Erro ao salvar competição", { description: e instanceof Error ? e.message : undefined });
     } finally {
       setIsSubmitting(false);
     }

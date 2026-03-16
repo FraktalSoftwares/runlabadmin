@@ -7,7 +7,7 @@ import { PushNotificationSheet } from "@/components/PushNotificationSheet";
 import { useState, useCallback, useEffect } from "react";
 import { useCorredoresFilters } from "@/contexts/CorredoresFilterContext";
 import { downloadCorredoresCsv } from "@/lib/exportCorredoresCsv";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export const CorredoresActions = () => {
   const { filters, setFilters } = useCorredoresFilters();
@@ -16,8 +16,6 @@ export const CorredoresActions = () => {
   const [pushSheetOpen, setPushSheetOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
   const [exporting, setExporting] = useState(false);
-  const { toast } = useToast();
-
   useEffect(() => {
     setSearchInput(filters.search ?? "");
   }, [filters.search]);
@@ -34,14 +32,14 @@ export const CorredoresActions = () => {
     setExporting(true);
     try {
       await downloadCorredoresCsv(filters);
-      toast({ title: "Exportação concluída", description: "O CSV foi baixado." });
+      toast.success("Exportação concluída", { description: "O CSV foi baixado." });
       setExportDialogOpen(false);
     } catch {
-      toast({ title: "Erro ao exportar", variant: "destructive" });
+      toast.error("Erro ao exportar");
     } finally {
       setExporting(false);
     }
-  }, [filters, toast]);
+  }, [filters]);
 
   return (
     <>

@@ -21,7 +21,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { Pagination } from "@/components/Pagination";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { downloadRecebimentosCsv } from "@/lib/exportFinanceiroCsv";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import {
   useRecebimentos,
   type RecebimentoRow,
@@ -128,10 +128,10 @@ export const FinanceiroRecebimentosContent = () => {
     setExporting(true);
     try {
       downloadRecebimentosCsv(filteredRows);
-      toast({ title: "Exportação concluída", description: "O CSV foi baixado." });
+      toast.success("Exportação concluída", { description: "O CSV foi baixado." });
       setExportDialogOpen(false);
     } catch {
-      toast({ title: "Erro ao exportar", variant: "destructive" });
+      toast.error("Erro ao exportar");
     } finally {
       setExporting(false);
     }

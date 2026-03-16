@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Landmark, Copy, User, Mail, Phone } from "lucide-react";
 import { usePendingWithdrawals, approveWithdrawal, type RepasseRow, type PartnerBankInfo } from "@/hooks/useRepasses";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { RecusarSaqueDialog } from "@/components/RecusarSaqueDialog";
 import { formatCurrency } from "@/lib/formatCurrency";
 
@@ -15,7 +15,7 @@ interface SolicitacoesSaqueDialogProps {
 
 function copyToClipboard(text: string) {
   navigator.clipboard.writeText(text);
-  toast({ title: "Copiado!", description: text });
+  toast.info("Copiado!", { description: text });
 }
 
 function BankInfoRow({ bankInfo }: { bankInfo: PartnerBankInfo }) {
@@ -104,12 +104,12 @@ export const SolicitacoesSaqueDialog = ({ open, onOpenChange }: SolicitacoesSaqu
     setProcessing(row.id);
     try {
       await approveWithdrawal(row.id);
-      toast({ title: "Saque aprovado", description: `Saque de ${row.nome} aprovado.` });
+      toast.success("Saque aprovado", { description: `Saque de ${row.nome} aprovado.` });
       queryClient.invalidateQueries({ queryKey: ["pending-withdrawals"] });
       queryClient.invalidateQueries({ queryKey: ["pending-withdrawals-count"] });
       queryClient.invalidateQueries({ queryKey: ["financeiro-repasses"] });
     } catch {
-      toast({ title: "Erro ao aprovar", variant: "destructive" });
+      toast.error("Erro ao aprovar");
     } finally {
       setProcessing(null);
     }

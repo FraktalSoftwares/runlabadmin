@@ -7,7 +7,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { PendingWithdrawalsBanner } from "@/components/PendingWithdrawalsBanner";
 import { SolicitacoesSaqueDialog } from "@/components/SolicitacoesSaqueDialog";
 import { downloadRepassesCsv } from "@/lib/exportFinanceiroCsv";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useRepasses, type RepasseRow } from "@/hooks/useRepasses";
 
 const PAGE_SIZE = 10;
@@ -41,10 +41,10 @@ export const FinanceiroRepassesContent = () => {
     setExporting(true);
     try {
       downloadRepassesCsv(rows);
-      toast({ title: "Exportação concluída", description: "O CSV foi baixado." });
+      toast.success("Exportação concluída", { description: "O CSV foi baixado." });
       setExportDialogOpen(false);
     } catch {
-      toast({ title: "Erro ao exportar", variant: "destructive" });
+      toast.error("Erro ao exportar");
     } finally {
       setExporting(false);
     }

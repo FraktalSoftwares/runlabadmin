@@ -307,8 +307,8 @@ function CheckoutForm({
       });
 
       if (error) {
-        console.error("Erro ao criar inscrição:", error);
-        toast.error("Pagamento confirmado, mas houve um erro ao criar a inscrição. Entre em contato com o suporte.");
+        console.error("Erro ao criar inscrição:", error.message, error.details, error.code);
+        toast.error(`Erro ao criar inscrição: ${error.message}`);
       }
     } catch (err) {
       console.error("Erro ao criar inscrição:", err);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export type RunnerPayment = {
   id: string;
@@ -193,6 +194,8 @@ export function useCorredorDetails(id: string | undefined) {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  useRealtimeRefetch(["profiles", "runner_payments", "credit_transactions", "competition_registrations", "user_runs"], fetchDetails);
 
   return { data, loading, error, refetch: fetchDetails };
 }

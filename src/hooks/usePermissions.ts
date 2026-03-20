@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import type { PermissionKey } from "@/lib/permissions";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export function usePermissions() {
   const { user, profile } = useAuth();
@@ -10,20 +11,18 @@ export function usePermissions() {
 
   const isAdmin = profile?.tipo_user === "Administrador";
 
-  useEffect(() => {
+  const fetchPermissions = useCallback(() => {
     if (!user?.id || !isAdmin) {
       setPermissions([]);
       setIsLoading(false);
       return;
     }
-    let cancelled = false;
     setIsLoading(true);
     supabase
       .from("admin_permissions")
       .select("permission_key")
       .eq("user_id", user.id)
       .then(({ data, error }) => {
-        if (cancelled) return;
         if (!error && data) {
           setPermissions(data.map((r) => r.permission_key));
         } else {
@@ -31,10 +30,13 @@ export function usePermissions() {
         }
         setIsLoading(false);
       });
-    return () => {
-      cancelled = true;
-    };
   }, [user?.id, isAdmin]);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [fetchPermissions]);
+
+  useRealtimeRefetch(["admin_permissions"], fetchPermissions);
 
   const hasPermission = useCallback(
     (key: string): boolean => permissions.includes(key),

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { CompetitionFilters } from "@/contexts/CompeticoesFilterContext";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export type CompetitionStatus = "aberta" | "em_andamento" | "finalizada" | "fechada" | "rascunho";
 
@@ -181,6 +182,8 @@ export function useCompetitions(filters: CompetitionFilters = {}) {
   useEffect(() => {
     fetchCompetitions();
   }, [fetchCompetitions]);
+
+  useRealtimeRefetch(["competitions", "competition_registrations"], fetchCompetitions);
 
   return { data, loading, error, refetch: fetchCompetitions };
 }

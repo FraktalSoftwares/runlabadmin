@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export type CorredorFilters = {
   search?: string;
@@ -198,6 +199,8 @@ export function useCorredores(
   useEffect(() => {
     fetch();
   }, [fetch]);
+
+  useRealtimeRefetch(["profiles", "competition_registrations"], fetch);
 
   return { data, total, loading, error, refetch: fetch };
 }

@@ -142,7 +142,7 @@ const EditarCompeticao = () => {
       inscricaoInicio: competition.registrationStartsAt ? new Date(competition.registrationStartsAt) : undefined,
       inscricaoFim: competition.registrationEndsAt ? new Date(competition.registrationEndsAt) : undefined,
       competicaoInicio: competition.startsAt ? new Date(competition.startsAt) : undefined,
-      competicaoFim: undefined,
+      competicaoFim: competition.endsAt ? new Date(competition.endsAt) : undefined,
       tentativasIlimitadas: competition.unlimitedAttempts ?? true,
       numeroMaximoInscritos: competition.maxRegistrations != null,
       maxInscritos: competition.maxRegistrations != null ? String(competition.maxRegistrations) : "",
@@ -232,6 +232,7 @@ const EditarCompeticao = () => {
     setIsSaving(true);
     try {
       const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
+      const endsAt = data.competicaoFim?.toISOString() ?? null;
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
       const regEnd = data.inscricaoFim?.toISOString() ?? null;
       const isFree = data.tipoCompeticao === "gratuita";
@@ -246,6 +247,7 @@ const EditarCompeticao = () => {
           title: data.nome.trim(),
           description: data.descricao?.trim() || null,
           starts_at: startsAt,
+          ends_at: endsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
           mode: data.modalidade ?? "outdoor",
@@ -255,6 +257,7 @@ const EditarCompeticao = () => {
           championship_id: championshipId,
           unlimited_attempts: data.tentativasIlimitadas ?? true,
           max_registrations: maxRegistrations,
+          has_kit: data.possuiKit === "sim",
           prize_description: data.premiacoes === "sim" ? (data.quantidadeRecompensas || data.outraQuantidade || null) : null,
           updated_at: new Date().toISOString()
         })
@@ -283,10 +286,23 @@ const EditarCompeticao = () => {
         .eq("id", id);
       if (sponsorsUpdateError) throw sponsorsUpdateError;
 
+      // Atualizar distância
+      if (competition && competition.distances[0]) {
+        const distLabel = data.distancia === "outro"
+          ? (data.outraDistancia?.trim() || "outro")
+          : data.distancia;
+        const { error: distError } = await supabase
+          .from("competition_distances")
+          .update({ label: distLabel })
+          .eq("id", competition.distances[0].id);
+        if (distError) throw distError;
+      }
+
+      // Atualizar lotes
       if (competition) {
         const lots = competition.lots;
-        if (lots[0] && (data.lote1Nome?.trim() || data.lote1Preco || data.lote1Descricao?.trim())) {
-          await supabase
+        if (lots[0]) {
+          const { error: lot1Error } = await supabase
             .from("competition_lots")
             .update({
               name: data.lote1Nome?.trim() || lots[0].name,
@@ -295,9 +311,10 @@ const EditarCompeticao = () => {
               is_subscription_allowed: data.lote1CreditosAssinatura ?? false
             })
             .eq("id", lots[0].id);
+          if (lot1Error) throw lot1Error;
         }
-        if (lots[1] && (data.lote2Nome?.trim() || data.lote2Preco || data.lote2Descricao?.trim())) {
-          await supabase
+        if (lots[1]) {
+          const { error: lot2Error } = await supabase
             .from("competition_lots")
             .update({
               name: data.lote2Nome?.trim() || lots[1].name,
@@ -306,6 +323,7 @@ const EditarCompeticao = () => {
               is_subscription_allowed: data.lote2CreditosAssinatura ?? false
             })
             .eq("id", lots[1].id);
+          if (lot2Error) throw lot2Error;
         }
       }
 

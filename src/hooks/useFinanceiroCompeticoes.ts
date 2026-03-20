@@ -4,6 +4,7 @@ import {
   fetchBrlPerCredit,
   fetchCreditUsageByCompetition,
 } from "@/lib/creditToBrl";
+import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
 export type FinanceiroCompetitionStatus = "aberta" | "em_andamento" | "finalizada" | "rascunho";
 
@@ -101,6 +102,11 @@ async function fetchFinanceiroCompeticoes(
 }
 
 export function useFinanceiroCompeticoes(search?: string) {
+  useRealtimeInvalidation(
+    ["competitions", "competition_registrations", "credit_transactions"],
+    [["financeiro-competicoes"]],
+  );
+
   return useQuery({
     queryKey: ["financeiro-competicoes", search],
     queryFn: () => fetchFinanceiroCompeticoes(search),

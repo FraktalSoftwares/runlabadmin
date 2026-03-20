@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export interface CreditTransaction {
   id: string;
@@ -85,6 +86,8 @@ export function useUserCredits(userId?: string) {
   useEffect(() => {
     fetchCredits();
   }, [fetchCredits]);
+
+  useRealtimeRefetch(["credit_transactions", "user_credit_balances"], fetchCredits);
 
   return { balance, transactions, loading, error, refetch: fetchCredits };
 }

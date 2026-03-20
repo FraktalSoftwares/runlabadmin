@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 /** View que já faz join com profiles e traz applicant_name (full_name do solicitante). */
 const PARTNER_REQUESTS_VIEW = "v_partnership_requests_with_profile";
@@ -83,6 +84,8 @@ export function usePartnerRequests() {
   useEffect(() => {
     fetch();
   }, [fetch]);
+
+  useRealtimeRefetch(["partnership_requests"], fetch);
 
   return { data, loading, error, refetch: fetch };
 }

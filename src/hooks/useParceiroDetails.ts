@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 /** Nível do usuário (tabela levels): id, level, name, badge_slug + imagem do badge se houver */
 export type LevelInfo = {
@@ -220,6 +221,8 @@ export function useParceiroDetails(id: string | undefined) {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  useRealtimeRefetch(["profiles", "partnership_requests", "competition_registrations", "user_runs"], fetchDetails);
 
   return { data, loading, error, refetch: fetchDetails };
 }

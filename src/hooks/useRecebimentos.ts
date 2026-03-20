@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
 export type RecebimentoStatus = "pago" | "em_aberto" | "vencido" | "reembolsado" | "cancelado";
 
@@ -167,6 +168,11 @@ async function fetchRecebimentos(search?: string): Promise<RecebimentoRow[]> {
 }
 
 export function useRecebimentos(search?: string) {
+  useRealtimeInvalidation(
+    ["runner_payments", "credit_transactions"],
+    [["financeiro-recebimentos"]],
+  );
+
   return useQuery({
     queryKey: ["financeiro-recebimentos", search],
     queryFn: () => fetchRecebimentos(search),

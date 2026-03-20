@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export interface Plan {
   id: string;
@@ -23,46 +24,40 @@ export function usePlans() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchPlans = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-    async function fetchPlans() {
-      setLoading(true);
-      setError(null);
+    const { data, error: fetchError } = await supabase
+      .from("plans")
+      .select("*")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true });
 
-      const { data, error: fetchError } = await supabase
-        .from("plans")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
-
-      if (cancelled) return;
-
-      if (fetchError) {
-        console.error("Error fetching plans:", fetchError);
-        setError(fetchError.message);
-        setLoading(false);
-        return;
-      }
-
-      const parsed: Plan[] = (data || []).map((row) => ({
-        ...row,
-        price: Number(row.price),
-        installment_value: row.installment_value
-          ? Number(row.installment_value)
-          : null,
-      }));
-
-      setPlans(parsed);
+    if (fetchError) {
+      console.error("Error fetching plans:", fetchError);
+      setError(fetchError.message);
       setLoading(false);
+      return;
     }
 
-    fetchPlans();
+    const parsed: Plan[] = (data || []).map((row) => ({
+      ...row,
+      price: Number(row.price),
+      installment_value: row.installment_value
+        ? Number(row.installment_value)
+        : null,
+    }));
 
-    return () => {
-      cancelled = true;
-    };
+    setPlans(parsed);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    fetchPlans();
+  }, [fetchPlans]);
+
+  useRealtimeRefetch(["plans"], fetchPlans);
 
   return { plans, loading, error };
 }

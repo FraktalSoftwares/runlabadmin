@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export type PartnerRow = {
   id: string;
@@ -157,6 +158,8 @@ export function usePartners(filters: PartnersFilters, page: number, pageSize: nu
   useEffect(() => {
     fetch();
   }, [fetch]);
+
+  useRealtimeRefetch(["partnership_requests", "profiles"], fetch);
 
   return { data, total, loading, error, refetch: fetch };
 }

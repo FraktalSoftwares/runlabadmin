@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ export type CompetitionDetail = {
   subtitle: string | null;
   locationName: string | null;
   startsAt: string;
+  endsAt: string | null;
   registrationStartsAt: string | null;
   registrationEndsAt: string | null;
   mode: string;
@@ -266,6 +268,7 @@ export function useCompetitionDetails(id: string | undefined) {
         subtitle: comp.subtitle,
         locationName: comp.location_name,
         startsAt: comp.starts_at,
+        endsAt: comp.ends_at ?? null,
         registrationStartsAt: comp.registration_starts_at,
         registrationEndsAt: comp.registration_ends_at,
         mode: comp.mode,
@@ -320,6 +323,11 @@ export function useCompetitionDetails(id: string | undefined) {
   useEffect(() => {
     fetchDetails();
   }, [fetchDetails]);
+
+  useRealtimeRefetch(
+    ["competitions", "competition_distances", "competition_lots", "competition_documents", "competition_sponsors", "competition_registrations"],
+    fetchDetails,
+  );
 
   return { data, loading, error, refetch: fetchDetails };
 }
@@ -558,6 +566,8 @@ export function useCompetitionRegistrations(
     fetchRegistrations();
   }, [fetchRegistrations]);
 
+  useRealtimeRefetch(["competition_registrations"], fetchRegistrations);
+
   return { data, total, loading, error, refetch: fetchRegistrations };
 }
 
@@ -648,6 +658,8 @@ export function useCompetitionRanking(
   useEffect(() => {
     fetchRanking();
   }, [fetchRanking]);
+
+  useRealtimeRefetch(["competition_best_runs", "user_runs"], fetchRanking);
 
   return { data, total, loading, error, refetch: fetchRanking };
 }

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { fetchBrlPerCredit } from "@/lib/creditToBrl";
+import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
 export interface OverviewMetrics {
   faturamento: number;
@@ -192,6 +193,11 @@ async function fetchOverviewData(year: number, month: number) {
 }
 
 export function useFinanceiroOverview(year: number, month: number) {
+  useRealtimeInvalidation(
+    ["runner_payments", "credit_transactions", "competition_registrations", "profiles"],
+    [["financeiro-overview"]],
+  );
+
   return useQuery({
     queryKey: ["financeiro-overview", year, month],
     queryFn: () => fetchOverviewData(year, month),

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export type CampeonatoRow = {
   id: string;
@@ -71,6 +72,8 @@ export function useCampeonatos() {
   useEffect(() => {
     fetchCampeonatos();
   }, [fetchCampeonatos]);
+
+  useRealtimeRefetch(["championships"], fetchCampeonatos);
 
   return { data, loading, error, refetch: fetchCampeonatos };
 }

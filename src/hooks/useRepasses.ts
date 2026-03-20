@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
+import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
 export type RepasseStatus = "pago" | "em_processamento" | "erro" | "pendente" | "aprovado" | "rejeitado";
 
@@ -133,6 +134,11 @@ async function fetchRepasses(search?: string): Promise<RepasseRow[]> {
 }
 
 export function useRepasses(search?: string) {
+  useRealtimeInvalidation(
+    ["partner_withdrawal_requests"],
+    [["financeiro-repasses"]],
+  );
+
   return useQuery({
     queryKey: ["financeiro-repasses", search],
     queryFn: () => fetchRepasses(search),
@@ -149,6 +155,11 @@ async function fetchPendingWithdrawalsCount(): Promise<number> {
 }
 
 export function usePendingWithdrawalsCount() {
+  useRealtimeInvalidation(
+    ["partner_withdrawal_requests"],
+    [["pending-withdrawals-count"]],
+  );
+
   return useQuery({
     queryKey: ["pending-withdrawals-count"],
     queryFn: fetchPendingWithdrawalsCount,
@@ -217,6 +228,11 @@ export async function fetchPendingWithdrawals(): Promise<RepasseRow[]> {
 }
 
 export function usePendingWithdrawals() {
+  useRealtimeInvalidation(
+    ["partner_withdrawal_requests"],
+    [["pending-withdrawals"]],
+  );
+
   return useQuery({
     queryKey: ["pending-withdrawals"],
     queryFn: fetchPendingWithdrawals,
@@ -346,6 +362,11 @@ export async function fetchPartnerCommissions(
 }
 
 export function usePartnerCommissions(partnerId: string | null) {
+  useRealtimeInvalidation(
+    ["partner_commissions"],
+    [["partner-commissions"]],
+  );
+
   return useQuery({
     queryKey: ["partner-commissions", partnerId],
     queryFn: () => fetchPartnerCommissions(partnerId!),

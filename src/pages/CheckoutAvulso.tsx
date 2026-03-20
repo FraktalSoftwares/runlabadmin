@@ -293,10 +293,31 @@ function CheckoutForm({
     }
   }, [pixData, pixTimer]);
 
-  const handlePaymentSuccess = useCallback((paymentId: string) => {
+  const handlePaymentSuccess = useCallback(async (paymentId: string) => {
+    // Criar inscrição na competição antes de mostrar sucesso
+    try {
+      const { error } = await supabase.from("competition_registrations").insert({
+        competition_id: competitionId,
+        user_id: user?.id,
+        distance_id: distanceId || null,
+        lot_id: lotData.id,
+        payment_id: paymentId,
+        accepted_terms: true,
+        status: "confirmed",
+      });
+
+      if (error) {
+        console.error("Erro ao criar inscrição:", error);
+        toast.error("Pagamento confirmado, mas houve um erro ao criar a inscrição. Entre em contato com o suporte.");
+      }
+    } catch (err) {
+      console.error("Erro ao criar inscrição:", err);
+      toast.error("Pagamento confirmado, mas houve um erro ao criar a inscrição. Entre em contato com o suporte.");
+    }
+
     setSuccessPaymentId(paymentId);
     setPaymentSuccess(true);
-  }, []);
+  }, [competitionId, distanceId, lotData.id, user?.id]);
 
   const returnToAppUrl = successPaymentId ? (() => {
     const params = new URLSearchParams({

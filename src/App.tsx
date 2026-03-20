@@ -22,6 +22,7 @@ import MinhaConta from "./pages/MinhaConta";
 import PlanoSelecao from "./pages/PlanoSelecao";
 import Checkout from "./pages/Checkout";
 import PagamentoConfirmado from "./pages/PagamentoConfirmado";
+import CheckoutAvulso from "./pages/CheckoutAvulso";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -37,6 +38,8 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/recuperacao-senha" element={<PasswordRecovery />} />
           <Route path="/definir-senha" element={<DefinarSenha />} />
+          {/* Checkout avulso (WebView do app — auth embutida) */}
+          <Route path="/corredor/:competitionId/checkout" element={<CheckoutAvulso />} />
           {/* Rotas do corredor */}
           <Route element={<CorredorGuard />}>
             <Route path="/corredor/planos" element={<PlanoSelecao />} />

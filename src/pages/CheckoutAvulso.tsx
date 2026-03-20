@@ -301,7 +301,6 @@ function CheckoutForm({
         user_id: user?.id,
         distance_id: distanceId || null,
         lot_id: lotData.id,
-        payment_id: paymentId,
         accepted_terms: true,
         status: "confirmed",
       });

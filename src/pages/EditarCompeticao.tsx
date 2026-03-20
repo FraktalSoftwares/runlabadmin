@@ -232,7 +232,6 @@ const EditarCompeticao = () => {
     setIsSaving(true);
     try {
       const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
-      const endsAt = data.competicaoFim?.toISOString() ?? null;
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
       const regEnd = data.inscricaoFim?.toISOString() ?? null;
       const isFree = data.tipoCompeticao === "gratuita";
@@ -241,29 +240,30 @@ const EditarCompeticao = () => {
         ? parseInt(data.maxInscritos, 10) || null
         : null;
 
-      const { error: updateError } = await supabase
+      const { data: updatedRows, error: updateError } = await supabase
         .from("competitions")
         .update({
           title: data.nome.trim(),
           description: data.descricao?.trim() || null,
           starts_at: startsAt,
-          ends_at: endsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
-          mode: data.modalidade ?? "outdoor",
+          mode: data.modalidade === "mista" ? "outdoor" : (data.modalidade ?? "outdoor"),
           format_type: data.formato ?? "oficial",
           format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,
           is_free: isFree,
           championship_id: championshipId,
           unlimited_attempts: data.tentativasIlimitadas ?? true,
           max_registrations: maxRegistrations,
-          has_kit: data.possuiKit === "sim",
           prize_description: data.premiacoes === "sim" ? (data.quantidadeRecompensas || data.outraQuantidade || null) : null,
-          updated_at: new Date().toISOString()
         })
-        .eq("id", id);
+        .eq("id", id)
+        .select();
 
       if (updateError) throw updateError;
+      if (!updatedRows || updatedRows.length === 0) {
+        throw new Error("Não foi possível atualizar a competição. Verifique suas permissões (RLS).");
+      }
 
       if (selectedImage) {
         const ext = selectedImage.name.split(".").pop()?.toLowerCase() || "jpg";
@@ -855,81 +855,85 @@ const EditarCompeticao = () => {
                 </Select>
               </div>
 
-              {/* Lote 1 */}
-              <div className="mb-6">
-                <Label className="text-sm text-muted-foreground mb-3 block">
-                  Ex.: Lote 1 - Medalha garantida
-                </Label>
-                
-                <Input
-                  placeholder="R$ 0,00"
-                  {...form.register("lote1Preco")}
-                  className="bg-[#1A1A1A] border-border/30 mb-3"
-                />
+              {form.watch("tipoCompeticao") === "paga" && (
+                <>
+                  {/* Lote 1 */}
+                  <div className="mb-6">
+                    <Label className="text-sm text-muted-foreground mb-3 block">
+                      Ex.: Lote 1 - Medalha garantida
+                    </Label>
 
-                <Label className="text-sm text-muted-foreground mb-2 block">
-                  Descrição
-                </Label>
-                <Textarea
-                  placeholder="Ex.: Modalida garantida à todos os inscritos"
-                  {...form.register("lote1Descricao")}
-                  className="bg-[#1A1A1A] border-border/30 min-h-[100px] resize-none mb-3"
-                />
+                    <Input
+                      placeholder="R$ 0,00"
+                      {...form.register("lote1Preco")}
+                      className="bg-[#1A1A1A] border-border/30 mb-3"
+                    />
 
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id="lote1Creditos"
-                    checked={form.watch("lote1CreditosAssinatura") || false}
-                    onCheckedChange={(checked) =>
-                      form.setValue("lote1CreditosAssinatura", checked as boolean, { shouldDirty: true })
-                    }
-                  />
-                  <Label
-                    htmlFor="lote1Creditos"
-                    className="text-sm text-muted-foreground cursor-pointer"
-                  >
-                    Permitir compra com créditos do assinatura
-                  </Label>
-                </div>
-              </div>
+                    <Label className="text-sm text-muted-foreground mb-2 block">
+                      Descrição
+                    </Label>
+                    <Textarea
+                      placeholder="Ex.: Medalha garantida a todos os inscritos"
+                      {...form.register("lote1Descricao")}
+                      className="bg-[#1A1A1A] border-border/30 min-h-[100px] resize-none mb-3"
+                    />
 
-              {/* Lote 2 */}
-              <div>
-                <Label className="text-sm text-muted-foreground mb-3 block">
-                  Ex.: Lote 2 - Camiseta garantida + Modalha
-                </Label>
-                
-                <Input
-                  placeholder="R$ 0,00"
-                  {...form.register("lote2Preco")}
-                  className="bg-[#1A1A1A] border-border/30 mb-3"
-                />
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="lote1Creditos"
+                        checked={form.watch("lote1CreditosAssinatura") || false}
+                        onCheckedChange={(checked) =>
+                          form.setValue("lote1CreditosAssinatura", checked as boolean, { shouldDirty: true })
+                        }
+                      />
+                      <Label
+                        htmlFor="lote1Creditos"
+                        className="text-sm text-muted-foreground cursor-pointer"
+                      >
+                        Permitir compra com créditos de assinatura
+                      </Label>
+                    </div>
+                  </div>
 
-                <Label className="text-sm text-muted-foreground mb-2 block">
-                  Descrição
-                </Label>
-                <Textarea
-                  placeholder="Ex.: Camiseta garantida à todos os inscritos"
-                  {...form.register("lote2Descricao")}
-                  className="bg-[#1A1A1A] border-border/30 min-h-[100px] resize-none mb-3"
-                />
+                  {/* Lote 2 */}
+                  <div>
+                    <Label className="text-sm text-muted-foreground mb-3 block">
+                      Ex.: Lote 2 - Camiseta garantida + Medalha
+                    </Label>
 
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    id="lote2Creditos"
-                    checked={form.watch("lote2CreditosAssinatura") || false}
-                    onCheckedChange={(checked) =>
-                      form.setValue("lote2CreditosAssinatura", checked as boolean, { shouldDirty: true })
-                    }
-                  />
-                  <Label
-                    htmlFor="lote2Creditos"
-                    className="text-sm text-muted-foreground cursor-pointer"
-                  >
-                    Permitir compra com créditos do assinatura
-                  </Label>
-                </div>
-              </div>
+                    <Input
+                      placeholder="R$ 0,00"
+                      {...form.register("lote2Preco")}
+                      className="bg-[#1A1A1A] border-border/30 mb-3"
+                    />
+
+                    <Label className="text-sm text-muted-foreground mb-2 block">
+                      Descrição
+                    </Label>
+                    <Textarea
+                      placeholder="Ex.: Camiseta garantida a todos os inscritos"
+                      {...form.register("lote2Descricao")}
+                      className="bg-[#1A1A1A] border-border/30 min-h-[100px] resize-none mb-3"
+                    />
+
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="lote2Creditos"
+                        checked={form.watch("lote2CreditosAssinatura") || false}
+                        onCheckedChange={(checked) =>
+                          form.setValue("lote2CreditosAssinatura", checked as boolean, { shouldDirty: true })
+                        }
+                      />
+                      <Label
+                        htmlFor="lote2Creditos"
+                        className="text-sm text-muted-foreground cursor-pointer"
+                      >
+                        Permitir compra com créditos de assinatura
+                      </Label>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

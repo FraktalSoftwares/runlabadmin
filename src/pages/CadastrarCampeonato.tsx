@@ -208,7 +208,7 @@ const CadastrarCampeonato = () => {
           starts_at: startsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
-          mode: data.modalidade ?? "outdoor",
+          mode: data.modalidade === "mista" ? "outdoor" : (data.modalidade ?? "outdoor"),
           format_type: data.formato ?? "oficial",
           format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,
           status,
@@ -876,118 +876,122 @@ const CadastrarCampeonato = () => {
                 </Select>
               </div>
 
-              {/* Lotes dinâmicos */}
-              {lotes.map((lote, index) => (
-                <div key={lote.id}>
-                  {index > 0 && <div className="border-t border-border mb-6" />}
-                  <div className="space-y-4">
-                    {/* Possuir Kit Incluso */}
-                    <div>
-                      <Label className="text-foreground text-sm mb-2 block">Possuir Kit Incluso?</Label>
-                      <RadioGroup
-                        value={lote.possuiKit}
-                        onValueChange={(value) => {
-                          const novosLotes = [...lotes];
-                          novosLotes[index].possuiKit = value as "sim" | "nao";
-                          setLotes(novosLotes);
-                        }}
-                        className="flex gap-6"
-                      >
+              {watch("tipoCompeticao") === "paga" && (
+                <>
+                  {/* Lotes dinâmicos */}
+                  {lotes.map((lote, index) => (
+                    <div key={lote.id}>
+                      {index > 0 && <div className="border-t border-border mb-6" />}
+                      <div className="space-y-4">
+                        {/* Possuir Kit Incluso */}
+                        <div>
+                          <Label className="text-foreground text-sm mb-2 block">Possuir Kit Incluso?</Label>
+                          <RadioGroup
+                            value={lote.possuiKit}
+                            onValueChange={(value) => {
+                              const novosLotes = [...lotes];
+                              novosLotes[index].possuiKit = value as "sim" | "nao";
+                              setLotes(novosLotes);
+                            }}
+                            className="flex gap-6"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="sim" id={`kit-sim-${lote.id}`} />
+                              <Label htmlFor={`kit-sim-${lote.id}`} className="text-foreground font-normal cursor-pointer">
+                                Sim
+                              </Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="nao" id={`kit-nao-${lote.id}`} />
+                              <Label htmlFor={`kit-nao-${lote.id}`} className="text-foreground font-normal cursor-pointer">
+                                Não
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        {/* Nome do lote */}
+                        <div>
+                          <Label className="text-foreground text-sm">
+                            Ex.: Lote {index + 1} - Medalha garantida
+                          </Label>
+                          <Input
+                            placeholder={`Ex.: Lote ${index + 1} - Medalha garantida`}
+                            className="mt-2"
+                            value={lote.nome}
+                            onChange={(e) => {
+                              const novosLotes = [...lotes];
+                              novosLotes[index].nome = e.target.value;
+                              setLotes(novosLotes);
+                            }}
+                          />
+                        </div>
+
+                        {/* Valor */}
+                        <div>
+                          <Input
+                            type="text"
+                            placeholder="R$ 0,00"
+                            value={lote.valor}
+                            onChange={(e) => {
+                              const novosLotes = [...lotes];
+                              novosLotes[index].valor = formatValorMask(e.target.value);
+                              setLotes(novosLotes);
+                            }}
+                          />
+                        </div>
+
+                        {/* Descrição */}
+                        <div>
+                          <Label className="text-foreground text-sm mb-2 block">Descrição</Label>
+                          <Textarea
+                            placeholder="Ex.: Medalha garantida a todos os inscritos"
+                            className="min-h-[100px]"
+                            value={lote.descricao}
+                            onChange={(e) => {
+                              const novosLotes = [...lotes];
+                              novosLotes[index].descricao = e.target.value;
+                              setLotes(novosLotes);
+                            }}
+                          />
+                        </div>
+
+                        {/* Permitir compra com créditos */}
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="sim" id={`kit-sim-${lote.id}`} />
-                          <Label htmlFor={`kit-sim-${lote.id}`} className="text-foreground font-normal cursor-pointer">
-                            Sim
+                          <Checkbox
+                            id={`creditos-${lote.id}`}
+                            checked={lote.permitirCreditos}
+                            onCheckedChange={(checked) => {
+                              const novosLotes = [...lotes];
+                              novosLotes[index].permitirCreditos = checked as boolean;
+                              setLotes(novosLotes);
+                            }}
+                          />
+                          <Label
+                            htmlFor={`creditos-${lote.id}`}
+                            className="text-foreground text-sm font-normal cursor-pointer"
+                          >
+                            Permitir compra com créditos de assinatura
                           </Label>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="nao" id={`kit-nao-${lote.id}`} />
-                          <Label htmlFor={`kit-nao-${lote.id}`} className="text-foreground font-normal cursor-pointer">
-                            Não
-                          </Label>
-                        </div>
-                      </RadioGroup>
+                      </div>
                     </div>
+                  ))}
 
-                    {/* Nome do lote */}
-                    <div>
-                      <Label className="text-foreground text-sm">
-                        Ex.: Lote {index + 1} - Medalha garantida
-                      </Label>
-                      <Input
-                        placeholder={`Ex.: Lote ${index + 1} - Medalha garantida`}
-                        className="mt-2"
-                        value={lote.nome}
-                        onChange={(e) => {
-                          const novosLotes = [...lotes];
-                          novosLotes[index].nome = e.target.value;
-                          setLotes(novosLotes);
-                        }}
-                      />
-                    </div>
-
-                    {/* Valor */}
-                    <div>
-                      <Input
-                        type="text"
-                        placeholder="R$ 0,00"
-                        value={lote.valor}
-                        onChange={(e) => {
-                          const novosLotes = [...lotes];
-                          novosLotes[index].valor = formatValorMask(e.target.value);
-                          setLotes(novosLotes);
-                        }}
-                      />
-                    </div>
-
-                    {/* Descrição */}
-                    <div>
-                      <Label className="text-foreground text-sm mb-2 block">Descrição</Label>
-                      <Textarea
-                        placeholder="Ex.: Medalha garantida a todos os inscritos"
-                        className="min-h-[100px]"
-                        value={lote.descricao}
-                        onChange={(e) => {
-                          const novosLotes = [...lotes];
-                          novosLotes[index].descricao = e.target.value;
-                          setLotes(novosLotes);
-                        }}
-                      />
-                    </div>
-
-                    {/* Permitir compra com créditos */}
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`creditos-${lote.id}`}
-                        checked={lote.permitirCreditos}
-                        onCheckedChange={(checked) => {
-                          const novosLotes = [...lotes];
-                          novosLotes[index].permitirCreditos = checked as boolean;
-                          setLotes(novosLotes);
-                        }}
-                      />
-                      <Label
-                        htmlFor={`creditos-${lote.id}`}
-                        className="text-foreground text-sm font-normal cursor-pointer"
-                      >
-                        Permitir compra com créditos de assinatura
-                      </Label>
-                    </div>
+                  {/* Botão adicionar opção */}
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={adicionarLote}
+                      className="border-[#CCF725] text-[#CCF725] hover:bg-[#CCF725]/10"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar opção de valor
+                    </Button>
                   </div>
-                </div>
-              ))}
-
-              {/* Botão adicionar opção */}
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={adicionarLote}
-                  className="border-[#CCF725] text-[#CCF725] hover:bg-[#CCF725]/10"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar opção de valor
-                </Button>
-              </div>
+                </>
+              )}
             </div>
           </div>
 

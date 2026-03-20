@@ -56,14 +56,18 @@ const CheckoutAvulso = () => {
   const { user, profile, profileLoading, loading: authLoading } = useAuth();
 
   const [lotData, setLotData] = useState<LotData | null>(null);
-  const [lotLoading, setLotLoading] = useState(true);
+  const [lotLoading, setLotLoading] = useState(false);
   const [lotError, setLotError] = useState<string | null>(null);
 
-  // Fetch lot + competition data
+  // Wait for auth first, then fetch lot + competition data
   useEffect(() => {
+    // Still loading auth — wait
+    if (authLoading) return;
+    // Not logged in — don't fetch yet (show login first)
+    if (!user) return;
+
     if (!competitionId || !lotId) {
       setLotError("Dados da competição não encontrados.");
-      setLotLoading(false);
       return;
     }
 
@@ -108,9 +112,10 @@ const CheckoutAvulso = () => {
     };
 
     fetchLotData();
-  }, [competitionId, lotId]);
+  }, [competitionId, lotId, authLoading, user]);
 
-  if (authLoading || lotLoading) {
+  // Auth loading
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Carregando...</div>
@@ -118,22 +123,10 @@ const CheckoutAvulso = () => {
     );
   }
 
-  if (lotError || !lotData) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-        <img src={logo} alt="RUNLAB" className="h-8 mb-8" />
-        <p className="text-destructive text-center">{lotError || "Dados não encontrados."}</p>
-      </div>
-    );
-  }
-
-  // Not logged in → show embedded login
+  // Not logged in → show embedded login (BEFORE fetching lot data)
   if (!user || (profileLoading && !profile)) {
     return (
-      <EmbeddedLogin
-        competitionTitle={lotData.competitionTitle}
-        lotName={lotData.name}
-      />
+      <EmbeddedLogin />
     );
   }
 
@@ -150,6 +143,24 @@ const CheckoutAvulso = () => {
     );
   }
 
+  // Loading lot data (after login)
+  if (lotLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Carregando dados do lote...</div>
+      </div>
+    );
+  }
+
+  if (lotError || !lotData) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
+        <img src={logo} alt="RUNLAB" className="h-8 mb-8" />
+        <p className="text-destructive text-center">{lotError || "Dados não encontrados."}</p>
+      </div>
+    );
+  }
+
   return (
     <CheckoutForm
       competitionId={competitionId!}
@@ -161,13 +172,7 @@ const CheckoutAvulso = () => {
 
 // ─── Embedded Login ─────────────────────────────────────
 
-function EmbeddedLogin({
-  competitionTitle,
-  lotName,
-}: {
-  competitionTitle: string;
-  lotName: string;
-}) {
+function EmbeddedLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -209,9 +214,8 @@ function EmbeddedLogin({
               Inscrição avulsa
             </p>
             <p className="text-base font-medium text-[#e0e0e0]">
-              {competitionTitle}
+              Finalize sua inscrição na competição
             </p>
-            <p className="text-sm text-[#CCF725] mt-1">{lotName}</p>
           </div>
 
           {/* Login form */}

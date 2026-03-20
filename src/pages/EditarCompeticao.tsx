@@ -35,7 +35,7 @@ function parseValorToCents(valor: string): number {
 const formSchema = z.object({
   nome: z.string().trim().min(1, "Nome da competição é obrigatório").max(100, "Nome muito longo"),
   descricao: z.string().trim().max(500, "Descrição muito longa"),
-  modalidade: z.enum(["indoor", "outdoor", "mista"], { required_error: "Selecione uma modalidade" }),
+  modalidade: z.enum(["indoor", "outdoor"], { required_error: "Selecione uma modalidade" }),
   formato: z.enum(["oficial", "patrocinada", "personalizado"], { required_error: "Selecione um formato" }),
   formatoObservacoes: z.string().optional(),
   campeonato: z.string().optional(),
@@ -109,6 +109,7 @@ const EditarCompeticao = () => {
   const [documento2, setDocumento2] = useState<File | null>(null);
   const [documento3, setDocumento3] = useState<File | null>(null);
   const [distanciaSelecionada, setDistanciaSelecionada] = useState<string>("outro");
+  const [availableChampionships, setAvailableChampionships] = useState<{ id: string; name: string }[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -127,13 +128,13 @@ const EditarCompeticao = () => {
     const outraDist = firstDistance && firstDistance.label && !/^\d+\s*km$/i.test(firstDistance.label)
       ? firstDistance.label
       : "";
-    const modeValue = (competition.mode === "indoor" || competition.mode === "outdoor" || competition.mode === "mista") ? competition.mode : "outdoor";
+    const modeValue = (competition.mode === "indoor" || competition.mode === "outdoor") ? competition.mode : "outdoor";
     const formatValue = (competition.formatType === "oficial" || competition.formatType === "patrocinada" || competition.formatType === "personalizado") ? competition.formatType : "oficial";
     form.reset({
       ...defaultFormValues,
       nome: competition.title || "",
       descricao: competition.description ?? "",
-      modalidade: modeValue as "indoor" | "outdoor" | "mista",
+      modalidade: modeValue as "indoor" | "outdoor",
       formato: formatValue as "oficial" | "patrocinada" | "personalizado",
       formatoObservacoes: competition.formatObservations ?? "",
       campeonato: competition.championshipId ?? "",
@@ -173,6 +174,17 @@ const EditarCompeticao = () => {
         .order("sort_order")
         .order("name");
       if (!error && data) setAvailableSponsors(data);
+    })();
+  }, []);
+
+  // Carregar lista de campeonatos
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from("championships")
+        .select("id, name")
+        .order("name");
+      if (!error && data) setAvailableChampionships(data);
     })();
   }, []);
 
@@ -248,7 +260,7 @@ const EditarCompeticao = () => {
           starts_at: startsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
-          mode: data.modalidade === "mista" ? "outdoor" : (data.modalidade ?? "outdoor"),
+          mode: data.modalidade ?? "outdoor",
           format_type: data.formato ?? "oficial",
           format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,
           is_free: isFree,
@@ -483,14 +495,13 @@ const EditarCompeticao = () => {
                   <Label htmlFor="modalidade" className="text-sm text-muted-foreground mb-2 block">
                     Modalidade
                   </Label>
-                  <Select value={form.watch("modalidade")} onValueChange={value => form.setValue("modalidade", value as "indoor" | "outdoor" | "mista", { shouldDirty: true, shouldValidate: true })}>
+                  <Select value={form.watch("modalidade")} onValueChange={value => form.setValue("modalidade", value as "indoor" | "outdoor", { shouldDirty: true, shouldValidate: true })}>
                     <SelectTrigger className="bg-[#1A1A1A] border-border/30">
                       <SelectValue placeholder="Selecione a modalidade" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1A1A1A] border-border/30">
                       <SelectItem value="indoor">Indoor</SelectItem>
                       <SelectItem value="outdoor">Outdoor</SelectItem>
-                      <SelectItem value="mista">Mista</SelectItem>
                     </SelectContent>
                   </Select>
                   {form.formState.errors.modalidade && <p className="text-sm text-destructive mt-1">{form.formState.errors.modalidade.message}</p>}
@@ -537,14 +548,15 @@ const EditarCompeticao = () => {
                   </Label>
                   <span className="text-xs text-muted-foreground">(opcional)</span>
                 </div>
-                <Select value={form.watch("campeonato")} onValueChange={value => form.setValue("campeonato", value, { shouldDirty: true, shouldValidate: true })}>
+                <Select value={form.watch("campeonato") || ""} onValueChange={value => form.setValue("campeonato", value, { shouldDirty: true, shouldValidate: true })}>
                   <SelectTrigger className="bg-[#1A1A1A] border-border/30">
                     <SelectValue placeholder="Selecione o campeonato a ser vinculado" />
                   </SelectTrigger>
                   <SelectContent className="bg-[#1A1A1A] border-border/30">
-                    <SelectItem value="campeonato1">Campeonato 1</SelectItem>
-                    <SelectItem value="campeonato2">Campeonato 2</SelectItem>
-                    <SelectItem value="campeonato3">Campeonato 3</SelectItem>
+                    <SelectItem value="nenhum">Nenhum</SelectItem>
+                    {availableChampionships.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -23,7 +23,7 @@ import { supabase } from "@/lib/supabase";
 const formSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
   descricao: z.string().optional(),
-  modalidade: z.enum(["indoor", "outdoor", "mista"], { required_error: "Modalidade é obrigatória" }),
+  modalidade: z.enum(["indoor", "outdoor"], { required_error: "Modalidade é obrigatória" }),
   formato: z.enum(["oficial", "patrocinada", "personalizado"], { required_error: "Formato é obrigatório" }),
   formatoObservacoes: z.string().optional(),
   campeonato: z.string().optional(),
@@ -208,7 +208,7 @@ const CadastrarCampeonato = () => {
           starts_at: startsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
-          mode: data.modalidade === "mista" ? "outdoor" : (data.modalidade ?? "outdoor"),
+          mode: data.modalidade ?? "outdoor",
           format_type: data.formato ?? "oficial",
           format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,
           status,
@@ -391,14 +391,13 @@ const CadastrarCampeonato = () => {
                   <Label htmlFor="modalidade" className="text-foreground">
                     Modalidade
                   </Label>
-                  <Select value={watch("modalidade")} onValueChange={(value) => setValue("modalidade", value as "indoor" | "outdoor" | "mista")}>
+                  <Select value={watch("modalidade")} onValueChange={(value) => setValue("modalidade", value as "indoor" | "outdoor")}>
                     <SelectTrigger className="mt-2">
                       <SelectValue placeholder="Selecione a modalidade" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="indoor">Indoor</SelectItem>
                       <SelectItem value="outdoor">Outdoor</SelectItem>
-                      <SelectItem value="mista">Mista</SelectItem>
                     </SelectContent>
                   </Select>
                   {errors.modalidade && (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Check, Loader2 } from "lucide-react";
@@ -13,6 +13,8 @@ const TIPO_USER_CORREDOR = "Corredor";
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as { from?: string })?.from || null;
   const { user, profile, profileLoading, loading, signOut } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
@@ -33,26 +35,25 @@ const Login = () => {
     }
   }, [user, profile, profileLoading, loading, signOut]);
 
+  // Resolve destino pós-login
+  const getDestination = () => {
+    if (redirectTo) return redirectTo;
+    if (profile?.tipo_user === TIPO_USER_CORREDOR) return "/corredor/planos";
+    return "/financeiro";
+  };
+
   // Redireciona baseado no tipo de usuário
   useEffect(() => {
     if (!loading && !profileLoading && user && profile) {
-      if (profile.tipo_user === TIPO_USER_CORREDOR) {
-        navigate("/corredor/planos", { replace: true });
-      } else {
-        navigate("/financeiro", { replace: true });
-      }
+      navigate(getDestination(), { replace: true });
     }
-  }, [user, profile, profileLoading, loading, navigate]);
+  }, [user, profile, profileLoading, loading, navigate, redirectTo]);
 
   useEffect(() => {
     if (!showLoginSuccess || profileLoading || !profile) return;
-    const destination =
-      profile.tipo_user === TIPO_USER_CORREDOR
-        ? "/corredor/planos"
-        : "/financeiro";
-    const t = setTimeout(() => navigate(destination), 1200);
+    const t = setTimeout(() => navigate(getDestination()), 1200);
     return () => clearTimeout(t);
-  }, [showLoginSuccess, profile, profileLoading, navigate]);
+  }, [showLoginSuccess, profile, profileLoading, navigate, redirectTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

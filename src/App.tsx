@@ -38,13 +38,12 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/recuperacao-senha" element={<PasswordRecovery />} />
           <Route path="/definir-senha" element={<DefinarSenha />} />
-          {/* Checkout avulso (WebView do app — auth embutida) */}
-          <Route path="/corredor/:competitionId/checkout" element={<CheckoutAvulso />} />
           {/* Rotas do corredor */}
           <Route element={<CorredorGuard />}>
             <Route path="/corredor/planos" element={<PlanoSelecao />} />
             <Route path="/corredor/checkout" element={<Checkout />} />
             <Route path="/corredor/pagamento-confirmado" element={<PagamentoConfirmado />} />
+            <Route path="/corredor/:competitionId/checkout" element={<CheckoutAvulso />} />
           </Route>
           {/* Rotas do admin */}
           <Route element={<AdminGuard />}>

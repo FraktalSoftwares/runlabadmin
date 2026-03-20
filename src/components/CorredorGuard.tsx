@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -7,6 +7,7 @@ const TIPO_USER_CORREDOR = "Corredor";
 
 export function CorredorGuard() {
   const { user, profile, profileLoading, loading, signOut } = useAuth();
+  const location = useLocation();
   const isCorredor = profile?.tipo_user === TIPO_USER_CORREDOR;
 
   if (loading || profileLoading) {
@@ -18,7 +19,8 @@ export function CorredorGuard() {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    // Salva a URL atual para redirecionar de volta após login
+    return <Navigate to="/login" state={{ from: location.pathname + location.search }} replace />;
   }
 
   if (!isCorredor) {

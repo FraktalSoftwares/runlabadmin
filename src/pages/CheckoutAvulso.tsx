@@ -14,8 +14,6 @@ import {
   Coins,
   Minus,
   Plus,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,22 +50,16 @@ const CheckoutAvulso = () => {
   const [searchParams] = useSearchParams();
   const lotId = searchParams.get("lotId");
   const distanceId = searchParams.get("distanceId") || undefined;
-  const navigate = useNavigate();
-  const { user, profile, profileLoading, loading: authLoading } = useAuth();
 
   const [lotData, setLotData] = useState<LotData | null>(null);
-  const [lotLoading, setLotLoading] = useState(false);
+  const [lotLoading, setLotLoading] = useState(true);
   const [lotError, setLotError] = useState<string | null>(null);
 
-  // Wait for auth first, then fetch lot + competition data
+  // Fetch lot + competition data (user já autenticado pelo CorredorGuard)
   useEffect(() => {
-    // Still loading auth — wait
-    if (authLoading) return;
-    // Not logged in — don't fetch yet (show login first)
-    if (!user) return;
-
     if (!competitionId || !lotId) {
       setLotError("Dados da competição não encontrados.");
+      setLotLoading(false);
       return;
     }
 
@@ -112,42 +104,12 @@ const CheckoutAvulso = () => {
     };
 
     fetchLotData();
-  }, [competitionId, lotId, authLoading, user]);
+  }, [competitionId, lotId]);
 
-  // Auth loading
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Carregando...</div>
-      </div>
-    );
-  }
-
-  // Not logged in → show embedded login (BEFORE fetching lot data)
-  if (!user || (profileLoading && !profile)) {
-    return (
-      <EmbeddedLogin />
-    );
-  }
-
-  // Logged in but not a runner
-  if (profile && profile.tipo_user !== "Corredor") {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6">
-        <img src={logo} alt="RUNLAB" className="h-8 mb-8" />
-        <h1 className="text-xl font-semibold text-foreground mb-2">Acesso restrito</h1>
-        <p className="text-muted-foreground text-center">
-          Esta área é exclusiva para corredores.
-        </p>
-      </div>
-    );
-  }
-
-  // Loading lot data (after login)
   if (lotLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">Carregando dados do lote...</div>
+        <div className="animate-pulse text-muted-foreground">Carregando...</div>
       </div>
     );
   }
@@ -169,127 +131,6 @@ const CheckoutAvulso = () => {
     />
   );
 };
-
-// ─── Embedded Login ─────────────────────────────────────
-
-function EmbeddedLogin() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.trim() || !password) {
-      toast.error("Preencha e-mail e senha.");
-      return;
-    }
-    setIsSubmitting(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
-    setIsSubmitting(false);
-    if (error) {
-      toast.error(
-        error.message === "Invalid login credentials"
-          ? "E-mail ou senha incorretos."
-          : error.message
-      );
-    }
-    // AuthContext will update automatically → component re-renders with user
-  };
-
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="flex items-center justify-center px-6 py-4 border-b border-border">
-        <img src={logo} alt="RUNLAB" className="h-8" />
-      </header>
-
-      <div className="flex-1 flex flex-col items-center justify-start px-4 py-8">
-        <div className="w-full max-w-[400px] space-y-6">
-          {/* Context info */}
-          <div className="bg-[#1a1a1a] border border-[#262626] rounded-xl p-4 text-center">
-            <p className="text-xs text-[#737373] uppercase tracking-wide mb-1">
-              Inscrição avulsa
-            </p>
-            <p className="text-base font-medium text-[#e0e0e0]">
-              Finalize sua inscrição na competição
-            </p>
-          </div>
-
-          {/* Login form */}
-          <div>
-            <h1 className="text-xl font-medium text-foreground mb-1">
-              Faça login para continuar
-            </h1>
-            <p className="text-sm text-muted-foreground mb-6">
-              Entre com sua conta RunLab para finalizar a inscrição.
-            </p>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="email" className="text-sm text-foreground">
-                  E-mail
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Digite seu e-mail"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 rounded-xl"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="password" className="text-sm text-foreground">
-                  Senha
-                </label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Insira sua senha"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 rounded-xl pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-[#CCF725] text-black hover:bg-[#CCF725]/90 font-medium h-12 rounded-xl"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Entrando...
-                  </>
-                ) : (
-                  "Entrar e continuar"
-                )}
-              </Button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Checkout Form ──────────────────────────────────────
 

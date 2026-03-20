@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useSearchParams, useNavigate } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import {
   CreditCard,
   Copy,
@@ -143,7 +143,6 @@ function CheckoutForm({
   lotData: LotData;
   distanceId?: string;
 }) {
-  const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
 
   const basePrice = lotData.priceCents / 100;
@@ -178,6 +177,10 @@ function CheckoutForm({
   const [couponValid, setCouponValid] = useState<boolean | null>(null);
   const [couponPartnerUserId, setCouponPartnerUserId] = useState<string | null>(null);
   const couponDebounce = useRef<ReturnType<typeof setTimeout>>();
+
+  // Payment success state
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [successPaymentId, setSuccessPaymentId] = useState<string | null>(null);
 
   // Runcoins discount
   const totalRuncoins = profile?.total_runcoins ?? 0;
@@ -290,38 +293,23 @@ function CheckoutForm({
     }
   }, [pixData, pixTimer]);
 
-  const buildSuccessState = useCallback(() => ({
-    mode: "lot" as const,
-    paymentMethod,
-    amount: finalPrice,
-    originalAmount: basePrice,
-    partnerDiscount: partnerDiscountAmount > 0 ? partnerDiscountAmount : undefined,
-    runcoinsDiscount: runcoinsDiscountAmount > 0 ? runcoinsDiscountAmount : undefined,
-    runcoinsUsed: runcoinsDiscountAmount > 0 ? Math.floor(runcoinsDiscountAmount) : undefined,
-    lotName: lotData.name,
-    competitionId,
-    lotId: lotData.id,
-    distanceId,
-  }), [paymentMethod, finalPrice, basePrice, partnerDiscountAmount, runcoinsDiscountAmount, lotData, competitionId, distanceId]);
-
   const handlePaymentSuccess = useCallback((paymentId: string) => {
-    const successState = { ...buildSuccessState(), paymentId };
-    // Try to return to app via deep link
-    if (APP_RETURN_URL) {
-      const params = new URLSearchParams({
-        status: "success",
-        competitionId,
-        lotId: lotData.id,
-        ...(distanceId ? { distanceId } : {}),
-        amount: String(finalPrice),
-        paymentId,
-        paymentMethod: paymentMethod || "",
-      });
-      window.location.href = `${APP_RETURN_URL}?${params.toString()}`;
-    } else {
-      navigate("/corredor/pagamento-confirmado", { state: successState });
-    }
-  }, [buildSuccessState, competitionId, lotData.id, distanceId, finalPrice, paymentMethod, navigate]);
+    setSuccessPaymentId(paymentId);
+    setPaymentSuccess(true);
+  }, []);
+
+  const returnToAppUrl = successPaymentId ? (() => {
+    const params = new URLSearchParams({
+      status: "success",
+      competitionId,
+      lotId: lotData.id,
+      ...(distanceId ? { distanceId } : {}),
+      amount: String(finalPrice),
+      paymentId: successPaymentId,
+      paymentMethod: paymentMethod || "",
+    });
+    return `${APP_RETURN_URL}?${params.toString()}`;
+  })() : null;
 
   const pollPaymentStatus = useCallback(async (paymentId: string) => {
     setIsPolling(true);
@@ -565,6 +553,36 @@ function CheckoutForm({
       setIsProcessing(false);
     }
   };
+
+  // Payment success — show confirmation screen with "back to app" button
+  if (paymentSuccess && returnToAppUrl) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <header className="flex items-center justify-center px-6 py-4 border-b border-border">
+          <img src={logo} alt="RUNLAB" className="h-8" />
+        </header>
+        <div className="flex-1 flex items-center justify-center px-4">
+          <div className="flex flex-col items-center gap-6 text-center max-w-sm">
+            <div className="w-20 h-20 rounded-full bg-[#CCF725] flex items-center justify-center">
+              <CheckCircle2 className="w-10 h-10 text-black" />
+            </div>
+            <h2 className="text-2xl font-semibold text-[#f5f5f5]">
+              Pagamento confirmado!
+            </h2>
+            <p className="text-sm text-[#b2b2b2]">
+              Sua inscrição na competição <span className="text-[#CCF725] font-medium">{lotData.competitionTitle}</span> foi realizada com sucesso.
+            </p>
+            <Button
+              className="w-full bg-[#CCF725] text-black hover:bg-[#CCF725]/90 font-semibold h-14 rounded-xl text-base mt-4"
+              onClick={() => { window.location.href = returnToAppUrl; }}
+            >
+              Voltar para o app
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Processing state
   if (isProcessing) {

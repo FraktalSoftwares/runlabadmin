@@ -294,7 +294,7 @@ function CheckoutForm({
   }, [pixData, pixTimer]);
 
   const handlePaymentSuccess = useCallback(async (paymentId: string) => {
-    // Criar inscrição na competição antes de mostrar sucesso
+    // 1. Criar inscrição na competição
     try {
       const { error } = await supabase.from("competition_registrations").insert({
         competition_id: competitionId,
@@ -315,9 +315,27 @@ function CheckoutForm({
       toast.error("Pagamento confirmado, mas houve um erro ao criar a inscrição. Entre em contato com o suporte.");
     }
 
+    // 2. Debitar runcoins usados
+    if (runcoinsDiscountAmount > 0 && user?.id) {
+      const runcoinsUsed = Math.floor(runcoinsDiscountAmount);
+      try {
+        const { error } = await supabase
+          .from("profiles")
+          .update({ total_runcoins: totalRuncoins - runcoinsUsed })
+          .eq("id", user.id);
+
+        if (error) {
+          console.error("Erro ao debitar Runcoins:", error);
+          toast.error("Erro ao debitar Runcoins. Entre em contato com o suporte.");
+        }
+      } catch (err) {
+        console.error("Erro ao debitar Runcoins:", err);
+      }
+    }
+
     setSuccessPaymentId(paymentId);
     setPaymentSuccess(true);
-  }, [competitionId, distanceId, lotData.id, user?.id]);
+  }, [competitionId, distanceId, lotData.id, user?.id, runcoinsDiscountAmount, totalRuncoins]);
 
   const returnToAppUrl = successPaymentId ? (() => {
     const params = new URLSearchParams({

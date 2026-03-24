@@ -41,6 +41,9 @@ const MinhaConta = () => {
   const [selectedUserPermsLoaded, setSelectedUserPermsLoaded] = useState(false);
   const [savingPerms, setSavingPerms] = useState(false);
   const [excludingUserId, setExcludingUserId] = useState<string | null>(null);
+  const [termosUso, setTermosUso] = useState<string | null>(null);
+  const [politicaPrivacidade, setPoliticaPrivacidade] = useState<string | null>(null);
+  const [sobreLoading, setSobreLoading] = useState(false);
 
   const [formFullName, setFormFullName] = useState("");
   const [formCargo, setFormCargo] = useState("");
@@ -112,6 +115,22 @@ const MinhaConta = () => {
         });
     }
   }, [activeTab, hasPermission]);
+
+  useEffect(() => {
+    if (activeTab === "sobre") {
+      setSobreLoading(true);
+      supabase
+        .from("app")
+        .select("termos_uso, politica_privacidade")
+        .limit(1)
+        .maybeSingle()
+        .then(({ data }) => {
+          setTermosUso(data?.termos_uso ?? null);
+          setPoliticaPrivacidade(data?.politica_privacidade ?? null);
+          setSobreLoading(false);
+        });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "dados-basicos" && isEditing) {
@@ -755,41 +774,27 @@ const MinhaConta = () => {
           </TabsContent>
 
           <TabsContent value="sobre" className="mt-8">
-            <div className="space-y-8">
-              <div className="space-y-8">
-                <h1 className="text-2xl font-semibold">Política de Privacidade</h1>
-                
+            {sobreLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-10">
                 <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-primary">1. Introdução</h2>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque nec lacus nec nisl vestibulum fermentum. Sed gravida orci vel nisi convallis, nec tincidunt mauris euismod. Ut euismod libero sit amet quam scelerisque, eget scelerisque elit tristique. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Morbi non ex ac velit tincidunt dapibus.
-                  </p>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Curabitur vel mi sed tortor rhoncus condimentum. Nulla facilisi. Integer id lectus ut risus fermentum viverra in et metus. Cras malesuada ligula non metus volutpat, nec hendrerit ligula luctus. Fusce eget justo at libero malesuada elementum. Mauris vel eros sed orci eleifend vehicula. Sed fringilla magna ac odio fringilla, in laoreet felis ultricies.
+                  <h1 className="text-2xl font-semibold">Termos de Uso</h1>
+                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {termosUso || "Conteúdo não disponível no momento."}
                   </p>
                 </div>
 
                 <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-primary">2. Informações gerais</h2>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque nec lacus nec nisl vestibulum fermentum. Sed gravida orci vel nisi convallis, nec tincidunt mauris euismod. Ut euismod libero sit amet quam scelerisque, eget scelerisque elit tristique. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Morbi non ex ac velit tincidunt dapibus.
-                  </p>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Curabitur vel mi sed tortor rhoncus condimentum. Nulla facilisi. Integer id lectus ut risus fermentum viverra in et metus. Cras malesuada ligula non metus volutpat, nec hendrerit ligula luctus. Fusce eget justo at libero malesuada elementum. Mauris vel eros sed orci eleifend vehicula. Sed fringilla magna ac odio fringilla, in laoreet felis ultricies.
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <h2 className="text-lg font-semibold text-primary">3. Sobre a aplicação inLida</h2>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque nec lacus nec nisl vestibulum fermentum. Sed gravida orci vel nisi convallis, nec tincidunt mauris euismod. Ut euismod libero sit amet quam scelerisque, eget scelerisque elit tristique. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Morbi non ex ac velit tincidunt dapibus.
-                  </p>
-                  <p className="text-muted-foreground leading-relaxed">
-                    Curabitur vel mi sed tortor rhoncus condimentum. Nulla facilisi. Integer id lectus ut risus fermentum viverra in et metus. Cras malesuada ligula non metus volutpat, nec hendrerit ligula luctus. Fusce eget justo at libero malesuada elementum. Mauris vel eros sed orci eleifend vehicula. Sed fringilla magna ac odio fringilla, in laoreet felis ultricies.
+                  <h1 className="text-2xl font-semibold">Política de Privacidade</h1>
+                  <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                    {politicaPrivacidade || "Conteúdo não disponível no momento."}
                   </p>
                 </div>
               </div>
-            </div>
+            )}
           </TabsContent>
         </Tabs>
       </main>

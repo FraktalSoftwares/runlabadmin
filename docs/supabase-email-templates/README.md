@@ -22,3 +22,4 @@ Arquivos:
 - **magic_link.html** — Magic link (login sem senha)
 - **invite.html** — Convite de usuário (Invite user)
 - **email_change.html** — Confirmação de mudança de e-mail
+- **reauthentication.html** — Código de verificação (Reauthentication)

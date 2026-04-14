@@ -67,20 +67,23 @@ export const CorredorProfileDialog = ({ open, onOpenChange, corredor }: Corredor
             </div>
 
             {/* Badges */}
-            <div>
-              <h3 className="text-sm font-semibold text-foreground mb-3">Badges conquistadas:</h3>
-              <div className="flex items-center gap-6">
-                {corredor.badges.map((badge, index) => {
-                  const badgeIcon = badge.name === 'Hero' ? badgeHero : badgeMachine;
-                  return (
-                    <div key={index} className="flex flex-col items-center gap-2">
-                      <img src={badgeIcon} alt={badge.name} className="w-16 h-16" />
-                      <span className="text-xs font-medium" style={{ color: '#CCF725' }}>{badge.name}</span>
-                    </div>
-                  );
-                })}
+            {corredor.badges.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-foreground mb-3">Badges conquistadas:</h3>
+                <div className="flex items-center gap-6 flex-wrap">
+                  {corredor.badges.map((badge, index) => {
+                    const isUrl = badge.icon.startsWith("http");
+                    const imgSrc = isUrl ? badge.icon : (badge.name === 'Hero' ? badgeHero : badgeMachine);
+                    return (
+                      <div key={index} className="flex flex-col items-center gap-2">
+                        <img src={imgSrc} alt={badge.name} className="w-16 h-16 object-contain" />
+                        <span className="text-xs font-medium" style={{ color: '#CCF725' }}>{badge.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </DialogContent>

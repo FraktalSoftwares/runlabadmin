@@ -26,6 +26,23 @@ export type ParceiroDetails = {
   status: string;
   avatar: string | null;
   cadastro: string;
+  /** Cupom/código de referência do parceiro */
+  referralCode: string | null;
+  /** Dados bancários do parceiro */
+  bankData: {
+    bank: string;
+    agency: string;
+    account: string;
+    pixKey: string;
+    cpfCnpj: string;
+    businessName: string;
+  };
+  /** Experiência de corrida do perfil */
+  runningExperience: string;
+  /** Posição no ranking global do campeonato */
+  rankingPosition: string;
+  /** Badges do usuário */
+  userBadges: Array<{ name: string; imageUrl: string | null }>;
   formData: {
     instagram: string;
     link: string;
@@ -85,7 +102,7 @@ export function useParceiroDetails(id: string | undefined) {
     setError(null);
     try {
       const [profileRes, partnershipRes, regsRes, runsRes] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, avatar_url, updated_at, created_at, tipo_user, current_level").eq("id", id).single(),
+        supabase.from("profiles").select("id, full_name, avatar_url, updated_at, created_at, tipo_user, current_level, referral_code, running_experience, partner_bank, partner_agency, partner_account, partner_pix_key, cpf_cnpj, business_name").eq("id", id).single(),
         supabase
           .from("partnership_requests")
           .select("partner_type, description, instagram, tiktok, youtube, site, email, phone, city, state, status, created_at")
@@ -116,6 +133,9 @@ export function useParceiroDetails(id: string | undefined) {
       let avatar: string | null = null;
       let nivel = 1;
       let cadastro = "—";
+      let referralCode: string | null = null;
+      let runningExperience = "—";
+      let bankData = { bank: "—", agency: "—", account: "—", pixKey: "—", cpfCnpj: "—", businessName: "—" };
 
       if (profile) {
         name = (profile.full_name ?? "").trim() || "—";
@@ -123,6 +143,16 @@ export function useParceiroDetails(id: string | undefined) {
         avatar = profile.avatar_url ?? null;
         nivel = Number(profile.current_level) || 1;
         cadastro = formatDate(profile.created_at);
+        referralCode = profile.referral_code ?? null;
+        runningExperience = profile.running_experience ?? "—";
+        bankData = {
+          bank: profile.partner_bank ?? "—",
+          agency: profile.partner_agency ?? "—",
+          account: profile.partner_account ?? "—",
+          pixKey: profile.partner_pix_key ?? "—",
+          cpfCnpj: profile.cpf_cnpj ?? "—",
+          businessName: profile.business_name ?? "—",
+        };
       }
 
       if (partnership) {
@@ -182,6 +212,37 @@ export function useParceiroDetails(id: string | undefined) {
         }
       }
 
+      // Buscar posição no ranking global do campeonato
+      let rankingPosition = "—";
+      try {
+        const { data: rankRow } = await supabase
+          .from("v_global_championship_ranking")
+          .select("position")
+          .eq("user_id", id)
+          .maybeSingle();
+        if (rankRow) rankingPosition = `${rankRow.position}º`;
+      } catch { /* view pode não existir */ }
+
+      // Buscar badges do usuário
+      let userBadges: Array<{ name: string; imageUrl: string | null }> = [];
+      try {
+        const { data: ubRows } = await supabase
+          .from("user_badges")
+          .select("badge_id, badges(name, image_url)")
+          .eq("user_id", id);
+        if (ubRows) {
+          userBadges = ubRows.map((ub: { badges?: { name?: string; image_url?: string } | null }) => ({
+            name: ub.badges?.name ?? "—",
+            imageUrl: ub.badges?.image_url ?? null,
+          }));
+        }
+      } catch { /* tabela pode não existir */ }
+
+      // Adicionar o badge de nível se não estiver nos user_badges
+      if (levelInfo?.badge_image_url && !userBadges.some(b => b.name === levelInfo.name)) {
+        userBadges.unshift({ name: levelInfo.name, imageUrl: levelInfo.badge_image_url });
+      }
+
       setData({
         id,
         name,
@@ -196,6 +257,11 @@ export function useParceiroDetails(id: string | undefined) {
         status,
         avatar,
         cadastro,
+        referralCode,
+        bankData,
+        runningExperience,
+        rankingPosition,
+        userBadges,
         formData: {
           instagram: (partnership?.instagram ?? "").trim() || "—",
           link: (partnership?.instagram ?? partnership?.tiktok ?? partnership?.youtube ?? "").trim() || "—",

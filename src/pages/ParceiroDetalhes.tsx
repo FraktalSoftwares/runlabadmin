@@ -173,12 +173,55 @@ const ParceiroDetalhes = () => {
           </CardContent>
         </Card>
 
+        {/* Cupom / Código de Referência */}
+        {parceiro.referralCode && (
+          <Card className="mb-6 bg-[#2a2a2a] border-0">
+            <CardContent className="p-6">
+              <p className="text-xs text-muted-foreground mb-1">Cupom / Código de referência</p>
+              <p className="text-lg font-semibold text-success">{parceiro.referralCode}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Dados Bancários */}
+        <Card className="mb-6 bg-[#2a2a2a] border-0">
+          <CardContent className="p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Dados bancários</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">CPF/CNPJ</p>
+                <p className="text-sm text-foreground">{parceiro.bankData.cpfCnpj}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Razão Social / Nome</p>
+                <p className="text-sm text-foreground">{parceiro.bankData.businessName}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Banco</p>
+                <p className="text-sm text-foreground">{parceiro.bankData.bank}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Agência</p>
+                <p className="text-sm text-foreground">{parceiro.bankData.agency}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Conta</p>
+                <p className="text-sm text-foreground">{parceiro.bankData.account}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Chave PIX</p>
+                <p className="text-sm text-foreground">{parceiro.bankData.pixKey}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Form Data Card */}
         <div className="mb-6">
           <div className="flex justify-end mb-4">
-            <Button 
+            <Button
               onClick={() => setIsInativarDialogOpen(true)}
-              className="gap-2 border-0 hover:brightness-90 transition-all" 
+              className="gap-2 border-0 hover:brightness-90 transition-all"
               style={{ backgroundColor: '#1A1A1A', color: '#808080' }}
             >
               <X className="w-4 h-4" />
@@ -301,10 +344,10 @@ const ParceiroDetalhes = () => {
           name: parceiro.name,
           type: parceiro.type !== "—" ? parceiro.type.toUpperCase() : "PARCEIRO",
           avatar: parceiro.avatar,
-          experiencia: "—",
-          ranking: "—",
+          experiencia: parceiro.runningExperience,
+          ranking: parceiro.rankingPosition,
           nivel: parceiro.levelInfo?.name ?? String(parceiro.nivel),
-          badges: parceiro.levelInfo ? [{ name: parceiro.levelInfo.name, icon: "🏆" }] : []
+          badges: parceiro.userBadges.map(b => ({ name: b.name, icon: b.imageUrl ?? "🏆" }))
         }}
       />
 

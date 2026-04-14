@@ -187,7 +187,7 @@ const CadastrarCampeonato = () => {
       const regEnd = data.inscricaoFim?.toISOString() ?? null;
       const isFree = data.tipoCompeticao === "gratuita" || lotes.every((l) => parseValorToCents(l.valor) === 0);
       const championshipId =
-        data.campeonato && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
+        data.campeonato && data.campeonato !== "none" && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
       const prizeText =
         temPremiacoes === "sim"
           ? quantidadePremiacoes === "outro"
@@ -307,7 +307,9 @@ const CadastrarCampeonato = () => {
       toast.success(status === "draft" ? "Rascunho salvo!" : "Competição publicada!");
       navigate("/gestao-competicoes");
     } catch (e) {
-      toast.error("Erro ao salvar competição", { description: e instanceof Error ? e.message : undefined });
+      const msg = e instanceof Error ? e.message : typeof e === "object" && e !== null && "message" in e ? String((e as { message: unknown }).message) : String(e);
+      console.error("Erro ao salvar competição:", e);
+      toast.error("Erro ao salvar competição", { description: msg });
     } finally {
       setIsSubmitting(false);
     }
@@ -477,6 +479,9 @@ const CadastrarCampeonato = () => {
                           <Button type="button" variant="outline" size="sm" className="border-[#CCF725] text-[#CCF725] hover:bg-[#CCF725]/10">
                             Procurar arquivo
                           </Button>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Recomendado: 1200 x 600 px, JPG ou PNG, até 2 MB
+                          </p>
                         </>
                       )}
                     </label>
@@ -520,6 +525,9 @@ const CadastrarCampeonato = () => {
                           <Button type="button" variant="outline" size="sm" className="border-[#CCF725] text-[#CCF725] hover:bg-[#CCF725]/10">
                             Procurar arquivo
                           </Button>
+                          <p className="text-xs text-muted-foreground mt-3">
+                            Recomendado: 400 x 400 px, JPG ou PNG, até 1 MB
+                          </p>
                         </>
                       )}
                     </label>
@@ -549,6 +557,7 @@ const CadastrarCampeonato = () => {
                     />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Nenhum</SelectItem>
                     {championships.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}

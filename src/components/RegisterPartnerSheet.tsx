@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface RegisterPartnerSheetProps {
   open: boolean;
@@ -41,21 +42,99 @@ export const RegisterPartnerSheet = ({ open, onOpenChange }: RegisterPartnerShee
     setPhone(formatted);
   };
 
-  const handleSubmit = () => {
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async () => {
     if (!name || !partnerType || !email || !city || !state) {
       toast.error("Preencha todos os campos obrigatórios");
       return;
     }
 
-    toast.success("Parceiro cadastrado com sucesso!");
-    onOpenChange(false);
-    // Reset form
-    setName("");
-    setPartnerType("");
-    setEmail("");
-    setPhone("");
-    setCity("");
-    setState("");
+    setSaving(true);
+    try {
+      // Buscar usuário pelo email na view de corredores
+      const { data: users, error: userError } = await supabase
+        .from("v_corredores_admin")
+        .select("id")
+        .eq("email", email.trim().toLowerCase())
+        .limit(1);
+
+      if (userError) throw userError;
+
+      if (!users || users.length === 0) {
+        toast.error("Nenhum usuário encontrado com este e-mail. O parceiro precisa ter uma conta no RunLab primeiro.");
+        return;
+      }
+
+      const userId = users[0].id;
+
+      // Verificar se já existe partnership_request para esse usuário
+      const { data: existing } = await supabase
+        .from("partnership_requests")
+        .select("id, status")
+        .eq("user_id", userId)
+        .limit(1);
+
+      if (existing && existing.length > 0) {
+        const status = existing[0].status;
+        if (status === "approved") {
+          toast.error("Este usuário já é um parceiro ativo.");
+        } else if (status === "pending") {
+          toast.error("Este usuário já tem uma solicitação de parceria pendente.");
+        } else {
+          // Reativar parceiro inativo
+          const { error: updateError } = await supabase
+            .from("partnership_requests")
+            .update({
+              status: "approved",
+              partner_type: partnerType,
+              phone: phone || null,
+              city,
+              state,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing[0].id);
+
+          if (updateError) throw updateError;
+          toast.success("Parceiro reativado com sucesso!");
+        }
+      } else {
+        // Criar nova solicitação já aprovada
+        const { error: insertError } = await supabase
+          .from("partnership_requests")
+          .insert({
+            user_id: userId,
+            partner_type: partnerType,
+            email: email.trim().toLowerCase(),
+            phone: phone || null,
+            city,
+            state,
+            status: "approved",
+          });
+
+        if (insertError) throw insertError;
+
+        // Atualizar perfil para marcar como parceiro
+        await supabase
+          .from("profiles")
+          .update({ is_partner: true, tipo_user: "Parceiro" })
+          .eq("id", userId);
+
+        toast.success("Parceiro cadastrado com sucesso!");
+      }
+
+      onOpenChange(false);
+      setName("");
+      setPartnerType("");
+      setEmail("");
+      setPhone("");
+      setCity("");
+      setState("");
+    } catch (e) {
+      toast.error(`Erro ao cadastrar parceiro: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -177,9 +256,10 @@ export const RegisterPartnerSheet = ({ open, onOpenChange }: RegisterPartnerShee
             </Button>
             <Button
               onClick={handleSubmit}
+              disabled={saving}
               className="flex-1 bg-success text-success-foreground hover:bg-success/90"
             >
-              Cadastrar parceiro
+              {saving ? "Cadastrando..." : "Cadastrar parceiro"}
             </Button>
           </div>
         </SheetFooter>

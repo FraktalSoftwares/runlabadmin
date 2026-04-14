@@ -298,14 +298,27 @@ const EditarCompeticao = () => {
         .eq("id", id);
       if (sponsorsUpdateError) throw sponsorsUpdateError;
 
-      // Atualizar distância
+      // Atualizar distância (label + meters)
       if (competition && competition.distances[0]) {
+        const DISTANCE_METERS: Record<string, number> = {
+          "3km": 3000, "5km": 5000, "10km": 10000,
+          "15km": 15000, "21km": 21000, "42km": 42000,
+        };
         const distLabel = data.distancia === "outro"
           ? (data.outraDistancia?.trim() || "outro")
           : data.distancia;
+        let meters: number | undefined;
+        if (data.distancia === "outro" && data.outraDistancia?.trim()) {
+          const km = parseFloat(data.outraDistancia.replace(",", "."));
+          if (!Number.isNaN(km)) meters = Math.round(km * 1000);
+        } else if (DISTANCE_METERS[data.distancia]) {
+          meters = DISTANCE_METERS[data.distancia];
+        }
+        const distUpdate: Record<string, unknown> = { label: distLabel };
+        if (meters != null) distUpdate.meters = meters;
         const { error: distError } = await supabase
           .from("competition_distances")
-          .update({ label: distLabel })
+          .update(distUpdate)
           .eq("id", competition.distances[0].id);
         if (distError) throw distError;
       }

@@ -88,7 +88,7 @@ function periodToDate(periodo: string | undefined): string | null {
 async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): Promise<CompetitionRow[]> {
   let query = supabase
     .from("competitions")
-    .select("id, title, subtitle, mode, format_type, status, is_free, starts_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at")
+    .select("id, title, subtitle, mode, format_type, status, is_free, starts_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at, championship_id")
     .order("created_at", { ascending: false });
 
   const dbStatus = statusToDb(filters.status);
@@ -114,6 +114,21 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
       .in("competition_id", ids);
     (regs ?? []).forEach((r) => {
       countsByCompetition[r.competition_id] = (countsByCompetition[r.competition_id] ?? 0) + 1;
+    });
+  }
+
+  // Buscar nomes dos campeonatos vinculados
+  const championshipIds = [...new Set(
+    (competitions ?? []).map((c) => c.championship_id).filter(Boolean)
+  )];
+  const championshipNames: Record<string, string> = {};
+  if (championshipIds.length > 0) {
+    const { data: champs } = await supabase
+      .from("championships")
+      .select("id, name")
+      .in("id", championshipIds);
+    (champs ?? []).forEach((ch: { id: string; name: string }) => {
+      championshipNames[ch.id] = ch.name;
     });
   }
 
@@ -144,7 +159,7 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
     inscritos: countsByCompetition[c.id] ?? 0,
     tipo: c.is_free ? "Gratuita" : "Paga",
     formato: formatLabel(c.format_type),
-    campeonato: "-",
+    campeonato: c.championship_id ? (championshipNames[c.championship_id] ?? "-") : "-",
     status: mapStatus(c.status as DbStatus),
   }));
 }

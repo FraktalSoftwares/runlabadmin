@@ -2,7 +2,7 @@ import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useParams, Link } from "react-router-dom";
-import { ChevronRight, ChevronLeft, Loader2, Ticket } from "lucide-react";
+import { ChevronRight, ChevronLeft, Loader2, Ticket, ExternalLink } from "lucide-react";
 import nivelIcon from "@/assets/nivel-icon.png";
 import { Button } from "@/components/ui/button";
 import { useCorredorDetails } from "@/hooks/useCorredorDetails";
@@ -139,8 +139,21 @@ const CorredorDetalhes = () => {
                     {corredor.email}
                   </p>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                    {corredor.stats.assinaturas > 0 ? "CORREDOR E PARCEIRO" : "CORREDOR"}
+                    {corredor.isPartner ? "CORREDOR E PARCEIRO" : "CORREDOR"}
                   </p>
+                  {corredor.isPartner && (
+                    <Link to={`/parceiros/${corredor.id}`}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-1 gap-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Ver perfil de parceiro
+                      </Button>
+                    </Link>
+                  )}
                 </div>
               </div>
               <Badge variant="default" className="bg-blue-500 hover:bg-blue-600">
@@ -166,12 +179,12 @@ const CorredorDetalhes = () => {
                 <p className="text-sm text-foreground">{corredor.birthDate}</p>
               </div>
               <div className="pt-4">
-                <p className="text-xs text-muted-foreground mb-1">Cidade</p>
-                <p className="text-sm text-foreground">{corredor.city}</p>
-              </div>
-              <div className="pt-4">
-                <p className="text-xs text-muted-foreground mb-1">Estado</p>
-                <p className="text-sm text-foreground">{corredor.state}</p>
+                <p className="text-xs text-muted-foreground mb-1">Cidade / Estado</p>
+                <p className="text-sm text-foreground">
+                  {corredor.city === "—" && corredor.state === "—"
+                    ? "—"
+                    : [corredor.city, corredor.state].filter((v) => v && v !== "—").join(" / ")}
+                </p>
               </div>
             </CardContent>
           </Card>

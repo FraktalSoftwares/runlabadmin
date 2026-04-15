@@ -47,6 +47,7 @@ export type CorredorDetails = {
   plan: string;
   avatar: string | null;
   creditBalance: number;
+  isPartner: boolean;
   stats: {
     provasConcluidas: number;
     assinaturas: number;
@@ -111,7 +112,7 @@ export function useCorredorDetails(id: string | undefined) {
     try {
       const { data: row, error: viewError } = await supabase
         .from("v_corredores_admin")
-        .select("id, full_name, email, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance, total_xp")
+        .select("id, full_name, email, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance, total_xp, is_partner")
         .eq("id", id)
         .single();
 
@@ -199,6 +200,7 @@ export function useCorredorDetails(id: string | undefined) {
         plan: derivePlanLabel(payments, Number(row.credit_balance) || 0),
         avatar: (row.avatar_url as string | null) ?? null,
         creditBalance: Number(row.credit_balance) || 0,
+        isPartner: Boolean(row.is_partner),
         stats: {
           provasConcluidas,
           assinaturas,

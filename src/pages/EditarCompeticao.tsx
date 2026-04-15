@@ -32,6 +32,28 @@ function parseValorToCents(valor: string): number {
   return Math.round(num * 100);
 }
 
+const DISTANCE_OPTIONS: { value: string; label: string }[] = [
+  { value: "3km", label: "3 km" },
+  { value: "5km", label: "5 km" },
+  { value: "10km", label: "10 km" },
+  { value: "15km", label: "15 km" },
+  { value: "21km", label: "21 km (meia-maratona)" },
+  { value: "42km", label: "42 km (maratona)" },
+];
+
+const STANDARD_DISTANCE_METERS: Record<string, number> = {
+  "3km": 3000,
+  "5km": 5000,
+  "10km": 10000,
+  "15km": 15000,
+  "21km": 21000,
+  "42km": 42000,
+};
+
+/** Normaliza label de distância para comparação (tolera "5km" vs "5 km"). */
+const normalizeDistanceLabel = (label: string): string =>
+  label.toLowerCase().replace(/\s+/g, "");
+
 const formSchema = z.object({
   nome: z.string().trim().min(1, "Nome da competição é obrigatório").max(100, "Nome muito longo"),
   descricao: z.string().trim().max(500, "Descrição muito longa"),
@@ -39,8 +61,6 @@ const formSchema = z.object({
   formato: z.enum(["oficial", "patrocinada", "personalizado"], { required_error: "Selecione um formato" }),
   formatoObservacoes: z.string().optional(),
   campeonato: z.string().optional(),
-  distancia: z.string().min(1, "Selecione ao menos uma distância"),
-  outraDistancia: z.string().optional(),
   inscricaoInicio: z.date().optional(),
   inscricaoFim: z.date().optional(),
   competicaoInicio: z.date().optional(),
@@ -71,8 +91,6 @@ const defaultFormValues: FormData = {
   formato: "oficial",
   formatoObservacoes: "",
   campeonato: "",
-  distancia: "outro",
-  outraDistancia: "",
   inscricaoInicio: undefined,
   inscricaoFim: undefined,
   competicaoInicio: undefined,
@@ -108,7 +126,8 @@ const EditarCompeticao = () => {
   const [documento1, setDocumento1] = useState<File | null>(null);
   const [documento2, setDocumento2] = useState<File | null>(null);
   const [documento3, setDocumento3] = useState<File | null>(null);
-  const [distanciaSelecionada, setDistanciaSelecionada] = useState<string>("outro");
+  const [selectedDistances, setSelectedDistances] = useState<string[]>([]);
+  const [outraDistanciaInput, setOutraDistanciaInput] = useState<string>("");
   const [availableChampionships, setAvailableChampionships] = useState<{ id: string; name: string }[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const form = useForm<FormData>({
@@ -121,13 +140,26 @@ const EditarCompeticao = () => {
     if (!competition) return;
     const lot0 = competition.lots[0];
     const lot1 = competition.lots[1];
-    const firstDistance = competition.distances[0];
-    const distValue = firstDistance
-      ? (firstDistance.label?.toLowerCase().replace(/\s/g, "") === "outro" ? "outro" : firstDistance.label) || "outro"
-      : "outro";
-    const outraDist = firstDistance && firstDistance.label && !/^\d+\s*km$/i.test(firstDistance.label)
-      ? firstDistance.label
-      : "";
+
+    // Popula seleção de distâncias a partir das linhas em competition_distances.
+    // Padrões (3km/5km/...) viram o próprio value; qualquer outra label vira "outro"
+    // e preenche outraDistanciaInput com os km (se houver mais de uma não-padrão,
+    // a primeira vence — mesmo limite do formulário de cadastro).
+    const selectedDistsAcc: string[] = [];
+    let outraInputAcc = "";
+    for (const d of competition.distances) {
+      const norm = normalizeDistanceLabel(d.label ?? "");
+      if (STANDARD_DISTANCE_METERS[norm]) {
+        selectedDistsAcc.push(norm);
+      } else if (!selectedDistsAcc.includes("outro")) {
+        selectedDistsAcc.push("outro");
+        const km = (d.meters ?? 0) / 1000;
+        outraInputAcc = Number.isFinite(km) && km > 0 ? String(km) : (d.label ?? "");
+      }
+    }
+    setSelectedDistances(selectedDistsAcc);
+    setOutraDistanciaInput(outraInputAcc);
+
     const modeValue = (competition.mode === "indoor" || competition.mode === "outdoor") ? competition.mode : "outdoor";
     const formatValue = (competition.formatType === "oficial" || competition.formatType === "patrocinada" || competition.formatType === "personalizado") ? competition.formatType : "oficial";
     form.reset({
@@ -138,8 +170,6 @@ const EditarCompeticao = () => {
       formato: formatValue as "oficial" | "patrocinada" | "personalizado",
       formatoObservacoes: competition.formatObservations ?? "",
       campeonato: competition.championshipId ?? "",
-      distancia: distValue,
-      outraDistancia: outraDist,
       inscricaoInicio: competition.registrationStartsAt ? new Date(competition.registrationStartsAt) : undefined,
       inscricaoFim: competition.registrationEndsAt ? new Date(competition.registrationEndsAt) : undefined,
       competicaoInicio: competition.startsAt ? new Date(competition.startsAt) : undefined,
@@ -298,29 +328,68 @@ const EditarCompeticao = () => {
         .eq("id", id);
       if (sponsorsUpdateError) throw sponsorsUpdateError;
 
-      // Atualizar distância (label + meters)
-      if (competition && competition.distances[0]) {
-        const DISTANCE_METERS: Record<string, number> = {
-          "3km": 3000, "5km": 5000, "10km": 10000,
-          "15km": 15000, "21km": 21000, "42km": 42000,
-        };
-        const distLabel = data.distancia === "outro"
-          ? (data.outraDistancia?.trim() || "outro")
-          : data.distancia;
-        let meters: number | undefined;
-        if (data.distancia === "outro" && data.outraDistancia?.trim()) {
-          const km = parseFloat(data.outraDistancia.replace(",", "."));
-          if (!Number.isNaN(km)) meters = Math.round(km * 1000);
-        } else if (DISTANCE_METERS[data.distancia]) {
-          meters = DISTANCE_METERS[data.distancia];
+      // Sincronizar distâncias: calcular diff entre o que está selecionado
+      // no formulário e o que existe no banco, inserindo as novas e removendo
+      // as que foram desmarcadas. Mantém intactas as que continuam selecionadas
+      // (preservando referências em competition_registrations.distance_id).
+      if (competition) {
+        type DesiredDistance = { label: string; meters: number; sort_order: number };
+        const desiredRows: DesiredDistance[] = [];
+        selectedDistances.forEach((d, i) => {
+          if (d === "outro") {
+            const km = parseFloat(outraDistanciaInput.replace(",", "."));
+            if (!Number.isNaN(km) && km > 0) {
+              desiredRows.push({
+                label: `${km} km`,
+                meters: Math.round(km * 1000),
+                sort_order: i,
+              });
+            }
+          } else if (STANDARD_DISTANCE_METERS[d]) {
+            desiredRows.push({
+              label: d,
+              meters: STANDARD_DISTANCE_METERS[d],
+              sort_order: i,
+            });
+          }
+        });
+
+        if (desiredRows.length === 0) {
+          throw new Error("Selecione ao menos uma distância para a competição.");
         }
-        const distUpdate: Record<string, unknown> = { label: distLabel };
-        if (meters != null) distUpdate.meters = meters;
-        const { error: distError } = await supabase
-          .from("competition_distances")
-          .update(distUpdate)
-          .eq("id", competition.distances[0].id);
-        if (distError) throw distError;
+
+        const existing = competition.distances;
+        const desiredKeys = new Set(desiredRows.map((r) => normalizeDistanceLabel(r.label)));
+        const existingKeys = new Set(existing.map((e) => normalizeDistanceLabel(e.label ?? "")));
+
+        // Insert novas
+        const toInsert = desiredRows
+          .filter((r) => !existingKeys.has(normalizeDistanceLabel(r.label)))
+          .map((r) => ({ ...r, competition_id: competition.id }));
+        if (toInsert.length > 0) {
+          const { error: insertError } = await supabase
+            .from("competition_distances")
+            .insert(toInsert);
+          if (insertError) throw insertError;
+        }
+
+        // Delete removidas — se tiver inscrição amarrada, FK bloqueia e a mensagem
+        // subjacente informa o admin que precisa cancelar inscrições antes.
+        const toDeleteIds = existing
+          .filter((e) => !desiredKeys.has(normalizeDistanceLabel(e.label ?? "")))
+          .map((e) => e.id);
+        if (toDeleteIds.length > 0) {
+          const { error: deleteError } = await supabase
+            .from("competition_distances")
+            .delete()
+            .in("id", toDeleteIds);
+          if (deleteError) {
+            const msg = deleteError.message?.includes("foreign")
+              ? "Não foi possível remover uma das distâncias porque já existem inscritos nela."
+              : deleteError.message;
+            throw new Error(msg);
+          }
+        }
       }
 
       // Atualizar lotes
@@ -572,6 +641,60 @@ const EditarCompeticao = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Distâncias permitidas */}
+              <div className="mb-6">
+                <Label className="text-sm text-muted-foreground mb-2 block">
+                  Distância(s) permitida(s)
+                </Label>
+                <div className="flex flex-wrap gap-3">
+                  {DISTANCE_OPTIONS.map((distance) => {
+                    const isSelected = selectedDistances.includes(distance.value);
+                    return (
+                      <Button
+                        key={distance.value}
+                        type="button"
+                        variant={isSelected ? "default" : "outline"}
+                        onClick={() =>
+                          setSelectedDistances((prev) =>
+                            prev.includes(distance.value)
+                              ? prev.filter((d) => d !== distance.value)
+                              : [...prev, distance.value]
+                          )
+                        }
+                        className="rounded-full"
+                      >
+                        {distance.label}
+                      </Button>
+                    );
+                  })}
+                  <Button
+                    type="button"
+                    variant={selectedDistances.includes("outro") ? "default" : "outline"}
+                    onClick={() =>
+                      setSelectedDistances((prev) =>
+                        prev.includes("outro")
+                          ? prev.filter((d) => d !== "outro")
+                          : [...prev, "outro"]
+                      )
+                    }
+                    className="rounded-full"
+                  >
+                    Outro
+                  </Button>
+                </div>
+                {selectedDistances.includes("outro") && (
+                  <Input
+                    placeholder="Ex.: 7 (para 7 km)"
+                    className="mt-3 bg-[#1A1A1A] border-border/30"
+                    value={outraDistanciaInput}
+                    onChange={(e) => setOutraDistanciaInput(e.target.value)}
+                  />
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Selecione uma ou mais distâncias. Distâncias com inscritos só podem ser removidas após cancelar as inscrições correspondentes.
+                </p>
               </div>
             </div>
           </div>

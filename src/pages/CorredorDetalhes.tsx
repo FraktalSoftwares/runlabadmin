@@ -121,8 +121,17 @@ const CorredorDetalhes = () => {
                 </div>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <img src={nivelIcon} alt="Nível" className="w-10 h-10" />
-                    <span className="text-sm text-success">NÍVEL {corredor.level}</span>
+                    <img
+                      src={corredor.tier.imageUrl ?? nivelIcon}
+                      alt={corredor.tier.name}
+                      className="w-10 h-10 object-contain"
+                    />
+                    <span className="text-sm text-success uppercase tracking-wide">
+                      {corredor.tier.name}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      • {corredor.tier.xp.toLocaleString("pt-BR")} XP
+                    </span>
                   </div>
                   <h2 className="text-xl font-semibold text-foreground">{corredor.name}</h2>
                   <p className="text-sm text-muted-foreground">

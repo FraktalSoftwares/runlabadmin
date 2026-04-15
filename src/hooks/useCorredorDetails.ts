@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { tierFromXP, type TierSlug } from "@/lib/tiers";
 import { useRealtimeRefetch } from "./useSupabaseRealtime";
 
 export type RunnerPayment = {
@@ -22,6 +23,15 @@ export type CreditTransaction = {
   created_at: string;
 };
 
+export type CorredorTier = {
+  slug: TierSlug;
+  name: string;
+  xp: number;
+  minXP: number;
+  maxXP: number;
+  imageUrl: string | null;
+};
+
 export type CorredorDetails = {
   id: string;
   name: string;
@@ -33,7 +43,7 @@ export type CorredorDetails = {
   gender: string;
   modality: string;
   lastAccess: string;
-  level: number;
+  tier: CorredorTier;
   plan: string;
   avatar: string | null;
   creditBalance: number;
@@ -101,7 +111,7 @@ export function useCorredorDetails(id: string | undefined) {
     try {
       const { data: row, error: viewError } = await supabase
         .from("v_corredores_admin")
-        .select("id, full_name, email, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance")
+        .select("id, full_name, email, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance, total_xp")
         .eq("id", id)
         .single();
 
@@ -113,8 +123,10 @@ export function useCorredorDetails(id: string | undefined) {
       }
 
       const userId = row.id as string;
+      const totalXp = Number(row.total_xp) || 0;
+      const tierDef = tierFromXP(totalXp);
 
-      const [regsResult, runsResult, paymentsResult, creditsResult] = await Promise.all([
+      const [regsResult, runsResult, paymentsResult, creditsResult, badgeResult] = await Promise.all([
         supabase
           .from("competition_registrations")
           .select("*", { count: "exact", head: true })
@@ -135,6 +147,11 @@ export function useCorredorDetails(id: string | undefined) {
           .select("id, amount, type, description, created_at")
           .eq("user_id", userId)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("badges")
+          .select("image_url")
+          .eq("slug", tierDef.slug)
+          .maybeSingle(),
       ]);
 
       const assinaturas = regsResult.count ?? 0;
@@ -171,7 +188,14 @@ export function useCorredorDetails(id: string | undefined) {
         gender: (row.gender as string) ?? "—",
         modality: preferredToModality(row.preferred_distance as string | null),
         lastAccess: formatLastAccess(row.updated_at as string | null),
-        level: 1,
+        tier: {
+          slug: tierDef.slug,
+          name: tierDef.name,
+          xp: totalXp,
+          minXP: tierDef.minXP,
+          maxXP: tierDef.maxXP,
+          imageUrl: (badgeResult.data?.image_url as string | null) ?? null,
+        },
         plan: derivePlanLabel(payments, Number(row.credit_balance) || 0),
         avatar: (row.avatar_url as string | null) ?? null,
         creditBalance: Number(row.credit_balance) || 0,
@@ -184,7 +208,17 @@ export function useCorredorDetails(id: string | undefined) {
         creditTransactions,
       });
     } catch (e) {
-      setError(e instanceof Error ? e : new Error("Erro ao carregar corredor"));
+      console.error("[useCorredorDetails] falha ao carregar corredor", { id, error: e });
+      if (e instanceof Error) {
+        setError(e);
+      } else if (e && typeof e === "object") {
+        const obj = e as { message?: string; details?: string; hint?: string; code?: string };
+        const msg = obj.message || obj.details || obj.hint || "Erro ao carregar corredor";
+        const suffix = obj.code ? ` (code: ${obj.code})` : "";
+        setError(new Error(`${msg}${suffix}`));
+      } else {
+        setError(new Error("Erro ao carregar corredor"));
+      }
       setData(null);
     } finally {
       setLoading(false);

@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AdminGuard } from "@/components/AdminGuard";
-import { CorredorGuard } from "@/components/CorredorGuard";
 import Parceiros from "./pages/Parceiros";
 import ParceiroDetalhes from "./pages/ParceiroDetalhes";
 import Financeiro from "./pages/Financeiro";
@@ -19,10 +18,6 @@ import Login from "./pages/Login";
 import PasswordRecovery from "./pages/PasswordRecovery";
 import DefinarSenha from "./pages/DefinarSenha";
 import MinhaConta from "./pages/MinhaConta";
-import PlanoSelecao from "./pages/PlanoSelecao";
-import Checkout from "./pages/Checkout";
-import PagamentoConfirmado from "./pages/PagamentoConfirmado";
-import CheckoutAvulso from "./pages/CheckoutAvulso";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,13 +33,6 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/recuperacao-senha" element={<PasswordRecovery />} />
           <Route path="/definir-senha" element={<DefinarSenha />} />
-          {/* Rotas do corredor */}
-          <Route element={<CorredorGuard />}>
-            <Route path="/corredor/planos" element={<PlanoSelecao />} />
-            <Route path="/corredor/checkout" element={<Checkout />} />
-            <Route path="/corredor/pagamento-confirmado" element={<PagamentoConfirmado />} />
-            <Route path="/corredor/:competitionId/checkout" element={<CheckoutAvulso />} />
-          </Route>
           {/* Rotas do admin */}
           <Route element={<AdminGuard />}>
             <Route path="/parceiros" element={<Parceiros />} />

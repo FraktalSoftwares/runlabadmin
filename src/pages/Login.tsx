@@ -35,25 +35,33 @@ const Login = () => {
     }
   }, [user, profile, profileLoading, loading, signOut]);
 
-  // Resolve destino pós-login
-  const getDestination = () => {
-    if (redirectTo) return redirectTo;
-    if (profile?.tipo_user === TIPO_USER_CORREDOR) return "/corredor/planos";
-    return "/financeiro";
+  const CHECKOUT_URL = import.meta.env.VITE_CHECKOUT_URL || "https://checkout.runlab.com.br";
+
+  const performRedirect = () => {
+    if (redirectTo) {
+      navigate(redirectTo, { replace: true });
+      return;
+    }
+    if (profile?.tipo_user === TIPO_USER_CORREDOR) {
+      window.location.href = `${CHECKOUT_URL}/corredor/planos`;
+      return;
+    }
+    navigate("/financeiro", { replace: true });
   };
 
-  // Redireciona baseado no tipo de usuário
   useEffect(() => {
     if (!loading && !profileLoading && user && profile) {
-      navigate(getDestination(), { replace: true });
+      performRedirect();
     }
-  }, [user, profile, profileLoading, loading, navigate, redirectTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, profile, profileLoading, loading, redirectTo]);
 
   useEffect(() => {
     if (!showLoginSuccess || profileLoading || !profile) return;
-    const t = setTimeout(() => navigate(getDestination()), 1200);
+    const t = setTimeout(performRedirect, 1200);
     return () => clearTimeout(t);
-  }, [showLoginSuccess, profile, profileLoading, navigate, redirectTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showLoginSuccess, profile, profileLoading, redirectTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

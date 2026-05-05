@@ -12,50 +12,29 @@ if (!supabaseUrl || !supabaseKey) {
 }
 
 const isProd = import.meta.env.PROD;
-const COOKIE_DOMAIN = isProd ? ".runlab.com.br" : undefined;
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
-const cookieStorage = {
-  getItem(key: string): string | null {
-    if (typeof document === "undefined") return null;
-    const target = `${encodeURIComponent(key)}=`;
-    for (const c of document.cookie.split("; ")) {
-      if (c.startsWith(target)) {
-        return decodeURIComponent(c.slice(target.length));
-      }
-    }
-    return null;
-  },
-  setItem(key: string, value: string): void {
-    if (typeof document === "undefined") return;
-    const parts = [
-      `${encodeURIComponent(key)}=${encodeURIComponent(value)}`,
-      "Path=/",
-      `Max-Age=${COOKIE_MAX_AGE}`,
-      "SameSite=Lax",
-    ];
-    if (COOKIE_DOMAIN) parts.push(`Domain=${COOKIE_DOMAIN}`);
-    if (isProd) parts.push("Secure");
-    document.cookie = parts.join("; ");
-  },
-  removeItem(key: string): void {
-    if (typeof document === "undefined") return;
+const clearLegacyCookie = (key: string) => {
+  if (typeof document === "undefined") return;
+  const expire = (domain?: string) => {
     const parts = [
       `${encodeURIComponent(key)}=`,
       "Path=/",
       "Max-Age=0",
       "SameSite=Lax",
     ];
-    if (COOKIE_DOMAIN) parts.push(`Domain=${COOKIE_DOMAIN}`);
+    if (domain) parts.push(`Domain=${domain}`);
     if (isProd) parts.push("Secure");
     document.cookie = parts.join("; ");
-  },
+  };
+  expire(".runlab.com.br");
+  expire();
 };
+
+clearLegacyCookie("runlab-auth");
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: {
-    storage: cookieStorage,
-    storageKey: "runlab-auth",
+    storageKey: "runlab-admin-auth",
     flowType: "pkce",
     persistSession: true,
     autoRefreshToken: true,

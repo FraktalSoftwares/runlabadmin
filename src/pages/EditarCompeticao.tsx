@@ -394,32 +394,65 @@ const EditarCompeticao = () => {
         }
       }
 
-      // Atualizar lotes
+      // Sincronizar lotes com base no tipo da competição.
+      // Gratuita: remove todos os lotes existentes para o app não exibir preços.
+      // Paga: faz upsert dos slots 0/1 do form (update se já existem, insert caso contrário).
       if (competition) {
-        const lots = competition.lots;
-        if (lots[0]) {
-          const { error: lot1Error } = await supabase
+        if (isFree) {
+          const { error: deleteError } = await supabase
             .from("competition_lots")
-            .update({
-              name: data.lote1Nome?.trim() || lots[0].name,
-              description: data.lote1Descricao?.trim() || null,
-              price_cents: parseValorToCents(data.lote1Preco ?? ""),
-              is_subscription_allowed: data.lote1CreditosAssinatura ?? false
-            })
-            .eq("id", lots[0].id);
-          if (lot1Error) throw lot1Error;
-        }
-        if (lots[1]) {
-          const { error: lot2Error } = await supabase
-            .from("competition_lots")
-            .update({
-              name: data.lote2Nome?.trim() || lots[1].name,
-              description: data.lote2Descricao?.trim() || null,
-              price_cents: parseValorToCents(data.lote2Preco ?? ""),
-              is_subscription_allowed: data.lote2CreditosAssinatura ?? false
-            })
-            .eq("id", lots[1].id);
-          if (lot2Error) throw lot2Error;
+            .delete()
+            .eq("competition_id", id);
+          if (deleteError) throw deleteError;
+        } else {
+          const lots = competition.lots;
+          const formLots = [
+            {
+              nome: data.lote1Nome?.trim() ?? "",
+              preco: data.lote1Preco ?? "",
+              descricao: data.lote1Descricao?.trim() ?? "",
+              creditos: data.lote1CreditosAssinatura ?? false,
+            },
+            {
+              nome: data.lote2Nome?.trim() ?? "",
+              preco: data.lote2Preco ?? "",
+              descricao: data.lote2Descricao?.trim() ?? "",
+              creditos: data.lote2CreditosAssinatura ?? false,
+            },
+          ];
+
+          for (let i = 0; i < formLots.length; i++) {
+            const formLot = formLots[i];
+            const existing = lots[i];
+            const hasContent = formLot.nome || formLot.preco || formLot.descricao;
+            if (!hasContent && !existing) continue;
+
+            const payload = {
+              name: formLot.nome || existing?.name || `Lote ${i + 1}`,
+              description: formLot.descricao || null,
+              price_cents: parseValorToCents(formLot.preco),
+              is_subscription_allowed: formLot.creditos,
+            };
+
+            if (existing) {
+              const { error: updateLotError } = await supabase
+                .from("competition_lots")
+                .update(payload)
+                .eq("id", existing.id);
+              if (updateLotError) throw updateLotError;
+            } else {
+              const { error: insertLotError } = await supabase
+                .from("competition_lots")
+                .insert({
+                  ...payload,
+                  competition_id: id,
+                  currency: "BRL",
+                  is_active: true,
+                  sort_order: i,
+                });
+              if (insertLotError) throw insertLotError;
+            }
+          }
         }
       }
 

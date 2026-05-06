@@ -274,6 +274,7 @@ const EditarCompeticao = () => {
     setIsSaving(true);
     try {
       const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
+      const endsAt = data.competicaoFim?.toISOString() ?? null;
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
       const regEnd = data.inscricaoFim?.toISOString() ?? null;
       const isFree = data.tipoCompeticao === "gratuita";
@@ -288,6 +289,7 @@ const EditarCompeticao = () => {
           title: data.nome.trim(),
           description: data.descricao?.trim() || null,
           starts_at: startsAt,
+          ends_at: endsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
           mode: data.modalidade ?? "outdoor",

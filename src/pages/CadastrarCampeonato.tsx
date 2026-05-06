@@ -183,6 +183,7 @@ const CadastrarCampeonato = () => {
         : data.inscricaoFim
           ? data.inscricaoFim.toISOString()
           : new Date().toISOString();
+      const endsAt = data.competicaoFim?.toISOString() ?? null;
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
       const regEnd = data.inscricaoFim?.toISOString() ?? null;
       const isFree = data.tipoCompeticao === "gratuita" || lotes.every((l) => parseValorToCents(l.valor) === 0);
@@ -206,6 +207,7 @@ const CadastrarCampeonato = () => {
           subtitle: null,
           location_name: null,
           starts_at: startsAt,
+          ends_at: endsAt,
           registration_starts_at: regStart,
           registration_ends_at: regEnd,
           mode: data.modalidade ?? "outdoor",

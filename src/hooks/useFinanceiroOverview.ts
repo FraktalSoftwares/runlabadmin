@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { fetchBrlPerCredit } from "@/lib/creditToBrl";
 import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
 export interface OverviewMetrics {
@@ -47,10 +46,10 @@ function periodBounds(year: number, month: number) {
 async function fetchOverviewData(year: number, month: number) {
   const { start, end } = periodBounds(year, month);
 
-  // ── 1) runner_payments confirmados no período ────────────────────
+  // ── 1) runner_payments confirmados no período (cash basis) ──────
   const { data: payments, error: paymentsError } = await supabase
     .from("runner_payments")
-    .select("id, amount, plan_type, status, paid_at, user_id")
+    .select("id, amount, plan_id, plan_type, status, paid_at, user_id, lot_id")
     .in("status", ["CONFIRMED", "RECEIVED"])
     .not("paid_at", "is", null)
     .gte("paid_at", start)
@@ -59,35 +58,28 @@ async function fetchOverviewData(year: number, month: number) {
   if (paymentsError) throw paymentsError;
 
   const paymentsList = payments ?? [];
-  const faturamentoPlanos = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
+  const faturamentoTotal = paymentsList.reduce((acc, p) => acc + Number(p.amount), 0);
 
+  // Novos assinantes do mês: usuários únicos que pagaram um plano anual.
   const assinantesSet = new Set(
     paymentsList.filter((p) => p.plan_type === "anual").map((p) => p.user_id),
   );
 
-  const byPlanType: Record<string, number> = { anual: 0, avulsa: 0 };
+  // Split por origem do pagamento para a pizza "Receita por tipo":
+  // - Inscrição: pagamento direto de lote/competição (plan_id null, lot_id presente)
+  // - Assinatura: plano anual
+  // - Avulso: plano avulsa (não confundir com lote)
+  const byReceiptType: Record<string, number> = { Inscrição: 0, Assinatura: 0, Avulso: 0 };
   paymentsList.forEach((p) => {
-    byPlanType[p.plan_type] = (byPlanType[p.plan_type] ?? 0) + Number(p.amount);
+    const amount = Number(p.amount);
+    if (p.plan_type === "anual") {
+      byReceiptType.Assinatura += amount;
+    } else if (!p.plan_id) {
+      byReceiptType.Inscrição += amount;
+    } else {
+      byReceiptType.Avulso += amount;
+    }
   });
-
-  // ── 2) credit_transactions de tipo "usage" no período ───────────
-  //    (créditos consumidos em competições nesse mês)
-  const [brlPerCredit, usageResult] = await Promise.all([
-    fetchBrlPerCredit(),
-    supabase
-      .from("credit_transactions")
-      .select("amount, competition_registration_id")
-      .eq("type", "usage")
-      .not("competition_registration_id", "is", null)
-      .gte("created_at", start)
-      .lte("created_at", end),
-  ]);
-
-  const usages = usageResult.data ?? [];
-  const totalCreditsUsed = usages.reduce((acc, u) => acc + Math.abs(u.amount), 0);
-  const faturamentoCreditos = Math.round(totalCreditsUsed * brlPerCredit * 100) / 100;
-
-  const faturamentoTotal = faturamentoPlanos + faturamentoCreditos;
 
   // ── 3) Inscrições no período ─────────────────────────────────────
   const { data: regs, error: regsError } = await supabase
@@ -107,27 +99,17 @@ async function fetchOverviewData(year: number, month: number) {
   const totalReceita = faturamentoTotal || 1;
   const receiptPie: PieDataItem[] = [];
 
-  if (faturamentoCreditos > 0) {
-    receiptPie.push({
-      name: "Inscrição",
-      value: Math.round((faturamentoCreditos / totalReceita) * 100),
-      color: RECEIPT_COLORS.Inscrição,
-    });
-  }
-  if (byPlanType.anual > 0) {
-    receiptPie.push({
-      name: "Assinatura",
-      value: Math.round((byPlanType.anual / totalReceita) * 100),
-      color: RECEIPT_COLORS.Assinatura,
-    });
-  }
-  if (byPlanType.avulsa > 0) {
-    receiptPie.push({
-      name: "Avulso",
-      value: Math.round((byPlanType.avulsa / totalReceita) * 100),
-      color: RECEIPT_COLORS.Avulso,
-    });
-  }
+  (["Inscrição", "Assinatura", "Avulso"] as const).forEach((name) => {
+    const value = byReceiptType[name];
+    if (value > 0) {
+      receiptPie.push({
+        name,
+        value: Math.round((value / totalReceita) * 100),
+        color: RECEIPT_COLORS[name],
+      });
+    }
+  });
+
   if (receiptPie.length === 0) {
     receiptPie.push({ name: "Nenhuma receita", value: 100, color: "#666" });
   }

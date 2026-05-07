@@ -1,9 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import {
-  fetchBrlPerCredit,
-  fetchCreditUsageByCompetition,
-} from "@/lib/creditToBrl";
 import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
 export type FinanceiroCompetitionStatus = "aberta" | "em_andamento" | "finalizada" | "rascunho";
@@ -55,12 +51,7 @@ async function fetchFinanceiroCompeticoes(
     query = query.ilike("title", `%${search.trim()}%`);
   }
 
-  const [compResult, brlPerCredit, creditUsage] = await Promise.all([
-    query,
-    fetchBrlPerCredit(),
-    fetchCreditUsageByCompetition(),
-  ]);
-
+  const compResult = await query;
   if (compResult.error) throw compResult.error;
   const competitions = compResult.data ?? [];
   if (!competitions.length) return [];
@@ -79,12 +70,45 @@ async function fetchFinanceiroCompeticoes(
     countByComp[r.competition_id] = (countByComp[r.competition_id] ?? 0) + 1;
   });
 
-  const { usageByCompetition } = creditUsage;
+  // Receita por competição (cash basis): runner_payments confirmados com
+  // competition_id apontando para a competição.
+  const { data: paymentsByComp } = await supabase
+    .from("runner_payments")
+    .select("id, amount, competition_id")
+    .in("status", ["CONFIRMED", "RECEIVED"])
+    .not("paid_at", "is", null)
+    .in("competition_id", ids);
+
+  const receitaByComp: Record<string, number> = {};
+  const paymentIdsByComp: Record<string, string[]> = {};
+  (paymentsByComp ?? []).forEach((p) => {
+    if (!p.competition_id) return;
+    receitaByComp[p.competition_id] = (receitaByComp[p.competition_id] ?? 0) + Number(p.amount);
+    (paymentIdsByComp[p.competition_id] ??= []).push(p.id);
+  });
+
+  // Comissão de parceiros por competição: somar partner_commissions vinculadas
+  // aos pagamentos da competição.
+  const allPaymentIds = Object.values(paymentIdsByComp).flat();
+  const commissionByPaymentId: Record<string, number> = {};
+  if (allPaymentIds.length > 0) {
+    const { data: commissions } = await supabase
+      .from("partner_commissions")
+      .select("payment_id, commission_amount")
+      .in("payment_id", allPaymentIds);
+    (commissions ?? []).forEach((c) => {
+      if (!c.payment_id) return;
+      commissionByPaymentId[c.payment_id] =
+        (commissionByPaymentId[c.payment_id] ?? 0) + Number(c.commission_amount);
+    });
+  }
 
   return competitions.map((c) => {
-    const creditsUsed = usageByCompetition[c.id] ?? 0;
-    const receita = Math.round(creditsUsed * brlPerCredit * 100) / 100;
-    const comissao = Math.round(receita * 0.06 * 100) / 100;
+    const receita = Math.round((receitaByComp[c.id] ?? 0) * 100) / 100;
+    const compPaymentIds = paymentIdsByComp[c.id] ?? [];
+    const comissao = Math.round(
+      compPaymentIds.reduce((acc, pid) => acc + (commissionByPaymentId[pid] ?? 0), 0) * 100,
+    ) / 100;
     const margem = Math.round((receita - comissao) * 100) / 100;
 
     return {
@@ -103,7 +127,12 @@ async function fetchFinanceiroCompeticoes(
 
 export function useFinanceiroCompeticoes(search?: string) {
   useRealtimeInvalidation(
-    ["competitions", "competition_registrations", "credit_transactions"],
+    [
+      "competitions",
+      "competition_registrations",
+      "runner_payments",
+      "partner_commissions",
+    ],
     [["financeiro-competicoes"]],
   );
 

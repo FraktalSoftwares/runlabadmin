@@ -175,7 +175,17 @@ async function fetchOverviewData(year: number, month: number) {
     : [{ name: "Sem comissões no período", value: 100, color: PARTNER_UNCLASSIFIED_COLOR }];
 
   // ── 6) Margem e comissão ─────────────────────────────────────────
-  const comissaoParceiros = Math.round(faturamentoTotal * 0.06 * 100) / 100;
+  // Comissão paga = repasses efetivados (paid_at no período).
+  const { data: paidWithdrawals } = await supabase
+    .from("partner_withdrawal_requests")
+    .select("amount, paid_at")
+    .not("paid_at", "is", null)
+    .gte("paid_at", start)
+    .lte("paid_at", end);
+
+  const comissaoParceiros = Math.round(
+    (paidWithdrawals ?? []).reduce((acc, w) => acc + Number(w.amount), 0) * 100,
+  ) / 100;
   const margemBruta = Math.round((faturamentoTotal - comissaoParceiros) * 100) / 100;
 
   const metrics: OverviewMetrics = {
@@ -217,7 +227,15 @@ async function fetchOverviewData(year: number, month: number) {
 
 export function useFinanceiroOverview(year: number, month: number) {
   useRealtimeInvalidation(
-    ["runner_payments", "credit_transactions", "competition_registrations", "profiles"],
+    [
+      "runner_payments",
+      "credit_transactions",
+      "competition_registrations",
+      "profiles",
+      "partner_commissions",
+      "partner_withdrawal_requests",
+      "partnership_requests",
+    ],
     [["financeiro-overview"]],
   );
 

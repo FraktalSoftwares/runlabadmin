@@ -30,11 +30,8 @@ const RECEIPT_COLORS: Record<string, string> = {
   Avulso: "#B3D91F",
 };
 
-const PARTNER_COLORS: Record<string, string> = {
-  Academia: "#CCF725",
-  Treinador: "#8B9D00",
-  Assessoria: "#E8F5A0",
-};
+const PARTNER_COLOR_PALETTE = ["#CCF725", "#8B9D00", "#E8F5A0", "#5A6700", "#D4FF66", "#A8C400"];
+const PARTNER_UNCLASSIFIED_COLOR = "#666";
 
 const MONTH_LABELS = [
   "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
@@ -135,21 +132,47 @@ async function fetchOverviewData(year: number, month: number) {
     receiptPie.push({ name: "Nenhuma receita", value: 100, color: "#666" });
   }
 
-  // ── 5) Gráfico de pizza: parceiros ───────────────────────────────
-  const { data: partners } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("tipo_user", "Parceiro");
+  // ── 5) Gráfico de pizza: comissão por tipo de parceiro ──────────
+  // partner_type vive em partnership_requests (status='approved'); cruzamos
+  // com partner_commissions do período para somar comissão real por categoria.
+  const [approvedPartnersResult, commissionsResult] = await Promise.all([
+    supabase
+      .from("partnership_requests")
+      .select("user_id, partner_type, updated_at")
+      .eq("status", "approved")
+      .order("updated_at", { ascending: false }),
+    supabase
+      .from("partner_commissions")
+      .select("partner_id, commission_amount")
+      .gte("created_at", start)
+      .lte("created_at", end),
+  ]);
 
-  const totalParceiros = partners?.length ?? 0;
-  const partnerPie: PieDataItem[] =
-    totalParceiros > 0
-      ? [
-          { name: "Academia", value: 34, color: PARTNER_COLORS.Academia },
-          { name: "Treinador", value: 33, color: PARTNER_COLORS.Treinador },
-          { name: "Assessoria", value: 33, color: PARTNER_COLORS.Assessoria },
-        ]
-      : [{ name: "Sem dados de parceiros", value: 100, color: "#666" }];
+  const typeByUser = new Map<string, string>();
+  (approvedPartnersResult.data ?? []).forEach((r) => {
+    if (!typeByUser.has(r.user_id)) typeByUser.set(r.user_id, r.partner_type);
+  });
+
+  const totalsByType: Record<string, number> = {};
+  let totalCommission = 0;
+  (commissionsResult.data ?? []).forEach((c) => {
+    const type = typeByUser.get(c.partner_id) ?? "Não classificado";
+    const amount = Number(c.commission_amount);
+    totalsByType[type] = (totalsByType[type] ?? 0) + amount;
+    totalCommission += amount;
+  });
+
+  const partnerPie: PieDataItem[] = totalCommission > 0
+    ? Object.entries(totalsByType)
+        .sort(([, a], [, b]) => b - a)
+        .map(([name, value], index) => ({
+          name,
+          value: Math.round((value / totalCommission) * 100),
+          color: name === "Não classificado"
+            ? PARTNER_UNCLASSIFIED_COLOR
+            : PARTNER_COLOR_PALETTE[index % PARTNER_COLOR_PALETTE.length],
+        }))
+    : [{ name: "Sem comissões no período", value: 100, color: PARTNER_UNCLASSIFIED_COLOR }];
 
   // ── 6) Margem e comissão ─────────────────────────────────────────
   const comissaoParceiros = Math.round(faturamentoTotal * 0.06 * 100) / 100;

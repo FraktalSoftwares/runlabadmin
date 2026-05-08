@@ -66,15 +66,15 @@ async function fetchOverviewData(year: number, month: number) {
   );
 
   // Split por origem do pagamento para a pizza "Receita por tipo":
-  // - Inscrição: pagamento direto de lote/competição (plan_id null, lot_id presente)
+  // - Inscrição: pagamento direto de lote/competição (lot_id presente)
   // - Assinatura: plano anual
-  // - Avulso: plano avulsa (não confundir com lote)
+  // - Avulso: compra de plano avulsa (sem lot_id; gera créditos)
   const byReceiptType: Record<string, number> = { Inscrição: 0, Assinatura: 0, Avulso: 0 };
   paymentsList.forEach((p) => {
     const amount = Number(p.amount);
     if (p.plan_type === "anual") {
       byReceiptType.Assinatura += amount;
-    } else if (!p.plan_id) {
+    } else if (p.lot_id) {
       byReceiptType.Inscrição += amount;
     } else {
       byReceiptType.Avulso += amount;

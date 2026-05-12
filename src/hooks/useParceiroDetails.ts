@@ -11,6 +11,23 @@ export type LevelInfo = {
   badge_image_url: string | null;
 };
 
+export type ParceiroCommissionItem = {
+  id: string;
+  data: string;
+  competicao: string;
+  valor: string;
+  valorNum: number;
+  status: "pending" | "confirmed" | "paid" | "cancelled" | string;
+};
+
+export type ParceiroRepasseItem = {
+  id: string;
+  data: string;
+  valor: string;
+  descricao: string;
+  status: "pago" | "pendente" | "aprovado" | "rejeitado";
+};
+
 export type ParceiroDetails = {
   id: string;
   name: string;
@@ -54,8 +71,17 @@ export type ParceiroDetails = {
   stats: {
     inscricoes: number;
     eventos: number;
-    receita: string;
+    /** Total de repasses já pagos (sum partner_withdrawal_requests.amount, status='paid'). */
+    repassesPagos: string;
+    repassesPagosNum: number;
+    /** Comissão acumulada (sum partner_commissions, status pending+confirmed). */
+    comissaoAcumulada: string;
+    comissaoAcumuladaNum: number;
   };
+  /** Histórico de comissões geradas (mais recentes primeiro). */
+  comissoes: ParceiroCommissionItem[];
+  /** Histórico de saques solicitados/pagos (mais recentes primeiro). */
+  repasses: ParceiroRepasseItem[];
 };
 
 function formatDate(d: string | null): string {
@@ -75,6 +101,28 @@ function formatLastAccess(updatedAt: string | null): string {
     " • " +
     d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
   );
+}
+
+function formatBrl(n: number): string {
+  return n.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function mapWithdrawalStatus(s: string | null): ParceiroRepasseItem["status"] {
+  switch (s) {
+    case "paid":
+      return "pago";
+    case "approved":
+      return "aprovado";
+    case "rejected":
+      return "rejeitado";
+    default:
+      return "pendente";
+  }
 }
 
 function mapPartnershipStatus(status: string | null): string {
@@ -101,7 +149,7 @@ export function useParceiroDetails(id: string | undefined) {
     setLoading(true);
     setError(null);
     try {
-      const [profileRes, partnershipRes, regsRes, runsRes] = await Promise.all([
+      const [profileRes, partnershipRes, regsRes, runsRes, commissionsRes, withdrawalsRes] = await Promise.all([
         supabase.from("profiles").select("id, full_name, avatar_url, updated_at, created_at, tipo_user, current_level, referral_code, running_experience, partner_bank, partner_agency, partner_account, partner_pix_key, cpf_cnpj, business_name").eq("id", id).single(),
         supabase
           .from("partnership_requests")
@@ -120,6 +168,18 @@ export function useParceiroDetails(id: string | undefined) {
           .select("*", { count: "exact", head: true })
           .eq("user_id", id)
           .eq("state", "finished"),
+        supabase
+          .from("partner_commissions")
+          .select("id, payment_id, commission_amount, status, created_at")
+          .eq("partner_id", id)
+          .in("status", ["pending", "confirmed"])
+          .order("created_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("partner_withdrawal_requests")
+          .select("id, amount, status, requested_at, reviewed_at, paid_at, admin_notes")
+          .eq("partner_id", id)
+          .order("requested_at", { ascending: false }),
       ]);
 
       const profile = profileRes.data;
@@ -183,6 +243,52 @@ export function useParceiroDetails(id: string | undefined) {
 
       const inscricoes = regsRes.count ?? 0;
       const eventos = runsRes.count ?? 0;
+
+      // ── Comissões geradas ──────────────────────────────────────
+      const commissionsRows = commissionsRes.data ?? [];
+      const comissaoAcumuladaNum = Math.round(
+        commissionsRows.reduce((acc, c) => acc + Number(c.commission_amount), 0) * 100,
+      ) / 100;
+
+      const paymentIds = [...new Set(commissionsRows.map((c) => c.payment_id).filter(Boolean))];
+      const descByPayment: Record<string, string> = {};
+      if (paymentIds.length > 0) {
+        const { data: payments } = await supabase
+          .from("runner_payments")
+          .select("id, description")
+          .in("id", paymentIds);
+        (payments ?? []).forEach((p) => {
+          descByPayment[p.id] = p.description ?? "Comissão";
+        });
+      }
+
+      const comissoes: ParceiroCommissionItem[] = commissionsRows.map((c) => {
+        const valorNum = Number(c.commission_amount);
+        return {
+          id: c.id,
+          data: formatDate(c.created_at),
+          competicao: descByPayment[c.payment_id] ?? "Comissão",
+          valor: formatBrl(valorNum),
+          valorNum,
+          status: c.status ?? "pending",
+        };
+      });
+
+      // ── Saques solicitados / pagos ─────────────────────────────
+      const withdrawalsRows = withdrawalsRes.data ?? [];
+      const repassesPagosNum = Math.round(
+        withdrawalsRows
+          .filter((w) => w.status === "paid")
+          .reduce((acc, w) => acc + Number(w.amount), 0) * 100,
+      ) / 100;
+
+      const repassesHist: ParceiroRepasseItem[] = withdrawalsRows.map((w) => ({
+        id: w.id,
+        data: formatDate(w.paid_at ?? w.requested_at),
+        valor: formatBrl(Number(w.amount)),
+        descricao: w.status === "paid" ? "Repasse pago" : "Solicitação de saque",
+        status: mapWithdrawalStatus(w.status),
+      }));
 
       let levelInfo: LevelInfo | null = null;
       const currentLevel = profile ? Number(profile.current_level) || null : null;
@@ -273,8 +379,13 @@ export function useParceiroDetails(id: string | undefined) {
         stats: {
           inscricoes,
           eventos,
-          receita: "—",
+          repassesPagos: formatBrl(repassesPagosNum),
+          repassesPagosNum,
+          comissaoAcumulada: formatBrl(comissaoAcumuladaNum),
+          comissaoAcumuladaNum,
         },
+        comissoes,
+        repasses: repassesHist,
       });
     } catch (e) {
       setError(e instanceof Error ? e : new Error("Erro ao carregar parceiro"));
@@ -288,7 +399,17 @@ export function useParceiroDetails(id: string | undefined) {
     fetchDetails();
   }, [fetchDetails]);
 
-  useRealtimeRefetch(["profiles", "partnership_requests", "competition_registrations", "user_runs"], fetchDetails);
+  useRealtimeRefetch(
+    [
+      "profiles",
+      "partnership_requests",
+      "competition_registrations",
+      "user_runs",
+      "partner_commissions",
+      "partner_withdrawal_requests",
+    ],
+    fetchDetails,
+  );
 
   return { data, loading, error, refetch: fetchDetails };
 }

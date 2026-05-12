@@ -2,7 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
-export type RepasseStatus = "pago" | "em_processamento" | "erro" | "pendente" | "aprovado" | "rejeitado";
+export type RepasseStatus =
+  | "pago"
+  | "em_processamento"
+  | "erro"
+  | "pendente"
+  | "aprovado"
+  | "rejeitado"
+  | "sem_solicitacao";
 
 export interface PartnerBankInfo {
   cpfCnpj: string | null;
@@ -19,8 +26,13 @@ export interface RepasseRow {
   partnerId: string;
   nome: string;
   tipoParceiro: string;
+  /** Comissão acumulada (sum partner_commissions pending+confirmed). Mantido em `repasses` por compat com dialog que rotula "Total de comissões". */
   repasses: number;
   repassesFormatted: string;
+  commissionAccrued: number;
+  commissionAccruedFormatted: string;
+  paidTotal: number;
+  paidTotalFormatted: string;
   ultimoRepasse: string;
   status: RepasseStatus;
   requestedAt: string;
@@ -54,30 +66,81 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function formatBrl(n: number): string {
+  return n.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 async function fetchRepasses(search?: string): Promise<RepasseRow[]> {
-  const { data: requests, error } = await supabase
+  // 1. Commissions accrued per partner (pending + confirmed).
+  const { data: commissions, error: commErr } = await supabase
+    .from("partner_commissions")
+    .select("partner_id, commission_amount, status")
+    .in("status", ["pending", "confirmed"]);
+  if (commErr) throw commErr;
+
+  const accruedByPartner = new Map<string, number>();
+  (commissions ?? []).forEach((c) => {
+    if (!c.partner_id) return;
+    accruedByPartner.set(
+      c.partner_id,
+      (accruedByPartner.get(c.partner_id) ?? 0) + Number(c.commission_amount),
+    );
+  });
+
+  // 2. All withdrawal requests (for paid total + latest request status).
+  const { data: withdrawals, error: withErr } = await supabase
     .from("partner_withdrawal_requests")
     .select("id, partner_id, amount, status, requested_at, reviewed_at, paid_at, admin_notes")
     .order("requested_at", { ascending: false });
+  if (withErr) throw withErr;
 
-  if (error) throw error;
-  if (!requests?.length) return [];
+  type Withdrawal = NonNullable<typeof withdrawals>[number];
+  const latestRequestByPartner = new Map<string, Withdrawal>();
+  const paidByPartner = new Map<string, number>();
+  const lastPaidAtByPartner = new Map<string, string>();
+  (withdrawals ?? []).forEach((w) => {
+    if (!latestRequestByPartner.has(w.partner_id)) {
+      latestRequestByPartner.set(w.partner_id, w);
+    }
+    if (w.status === "paid") {
+      paidByPartner.set(
+        w.partner_id,
+        (paidByPartner.get(w.partner_id) ?? 0) + Number(w.amount),
+      );
+      if (w.paid_at) {
+        const cur = lastPaidAtByPartner.get(w.partner_id);
+        if (!cur || new Date(w.paid_at) > new Date(cur)) {
+          lastPaidAtByPartner.set(w.partner_id, w.paid_at);
+        }
+      }
+    }
+  });
 
-  const partnerIds = [...new Set(requests.map((r) => r.partner_id))];
+  // Union of partners with commission OR any withdrawal request.
+  const partnerIds = Array.from(
+    new Set([...accruedByPartner.keys(), ...latestRequestByPartner.keys()]),
+  );
+  if (partnerIds.length === 0) return [];
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name, cpf_cnpj, corporate_email, partner_phone, partner_bank, partner_agency, partner_account, partner_pix_key")
-    .in("id", partnerIds);
-
-  const { data: partnershipRequests } = await supabase
-    .from("partnership_requests")
-    .select("user_id, partner_type")
-    .in("user_id", partnerIds);
+  const [profilesRes, partnershipRes] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, cpf_cnpj, corporate_email, partner_phone, partner_bank, partner_agency, partner_account, partner_pix_key")
+      .in("id", partnerIds),
+    supabase
+      .from("partnership_requests")
+      .select("user_id, partner_type")
+      .in("user_id", partnerIds),
+  ]);
 
   const nameByPartner: Record<string, string> = {};
   const bankByPartner: Record<string, PartnerBankInfo> = {};
-  (profiles ?? []).forEach((p) => {
+  (profilesRes.data ?? []).forEach((p) => {
     nameByPartner[p.id] = p.full_name ?? "Parceiro";
     bankByPartner[p.id] = {
       cpfCnpj: p.cpf_cnpj ?? null,
@@ -91,34 +154,46 @@ async function fetchRepasses(search?: string): Promise<RepasseRow[]> {
   });
 
   const tipoByPartner: Record<string, string> = {};
-  (partnershipRequests ?? []).forEach((pr) => {
+  (partnershipRes.data ?? []).forEach((pr) => {
     if (!tipoByPartner[pr.user_id]) {
       tipoByPartner[pr.user_id] = pr.partner_type ?? "Parceiro";
     }
   });
 
-  const rows: RepasseRow[] = requests.map((r) => {
-    const amount = Number(r.amount);
+  const rows: RepasseRow[] = partnerIds.map((partnerId) => {
+    const accrued = Math.round((accruedByPartner.get(partnerId) ?? 0) * 100) / 100;
+    const paid = Math.round((paidByPartner.get(partnerId) ?? 0) * 100) / 100;
+    const lastReq = latestRequestByPartner.get(partnerId);
+    const lastPaidAt = lastPaidAtByPartner.get(partnerId) ?? null;
+    const status: RepasseStatus = lastReq ? mapStatus(lastReq.status) : "sem_solicitacao";
+
     return {
-      id: r.id,
-      partnerId: r.partner_id,
-      nome: nameByPartner[r.partner_id] ?? "Parceiro",
-      tipoParceiro: tipoByPartner[r.partner_id] ?? "Parceiro",
-      repasses: amount,
-      repassesFormatted: amount.toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }),
-      ultimoRepasse: formatDate(r.requested_at),
-      status: mapStatus(r.status),
-      requestedAt: r.requested_at,
-      reviewedAt: r.reviewed_at ?? null,
-      paidAt: r.paid_at ?? null,
-      adminNotes: r.admin_notes ?? null,
-      bankInfo: bankByPartner[r.partner_id],
+      id: lastReq?.id ?? "",
+      partnerId,
+      nome: nameByPartner[partnerId] ?? "Parceiro",
+      tipoParceiro: tipoByPartner[partnerId] ?? "Parceiro",
+      repasses: accrued,
+      repassesFormatted: formatBrl(accrued),
+      commissionAccrued: accrued,
+      commissionAccruedFormatted: formatBrl(accrued),
+      paidTotal: paid,
+      paidTotalFormatted: formatBrl(paid),
+      ultimoRepasse: lastPaidAt ? formatDate(lastPaidAt) : "—",
+      status,
+      requestedAt: lastReq?.requested_at ?? "",
+      reviewedAt: lastReq?.reviewed_at ?? null,
+      paidAt: lastReq?.paid_at ?? null,
+      adminNotes: lastReq?.admin_notes ?? null,
+      bankInfo: bankByPartner[partnerId],
     };
+  });
+
+  // Pending withdrawal requests first; then by commission accrued desc.
+  rows.sort((a, b) => {
+    const aPending = a.status === "pendente" ? 0 : 1;
+    const bPending = b.status === "pendente" ? 0 : 1;
+    if (aPending !== bPending) return aPending - bPending;
+    return b.commissionAccrued - a.commissionAccrued;
   });
 
   if (search?.trim()) {
@@ -135,7 +210,7 @@ async function fetchRepasses(search?: string): Promise<RepasseRow[]> {
 
 export function useRepasses(search?: string) {
   useRealtimeInvalidation(
-    ["partner_withdrawal_requests"],
+    ["partner_withdrawal_requests", "partner_commissions", "partnership_requests"],
     [["financeiro-repasses"]],
   );
 
@@ -209,13 +284,18 @@ export async function fetchPendingWithdrawals(): Promise<RepasseRow[]> {
 
   return requests.map((r) => {
     const amount = Number(r.amount);
+    const formatted = formatBrl(amount);
     return {
       id: r.id,
       partnerId: r.partner_id,
       nome: nameByPartner[r.partner_id] ?? "Parceiro",
       tipoParceiro: tipoByPartner[r.partner_id] ?? "Parceiro",
       repasses: amount,
-      repassesFormatted: amount.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2 }),
+      repassesFormatted: formatted,
+      commissionAccrued: amount,
+      commissionAccruedFormatted: formatted,
+      paidTotal: 0,
+      paidTotalFormatted: formatBrl(0),
       ultimoRepasse: formatDate(r.requested_at),
       status: mapStatus(r.status),
       requestedAt: r.requested_at,

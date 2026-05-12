@@ -133,8 +133,9 @@ export function downloadParceirosCsv(rows: PartnerRow[]) {
 const REPASSES_HEADERS = [
   "Nome",
   "Tipo de parceiro",
-  "Valor",
-  "Data solicitação",
+  "Comissão acumulada",
+  "Total já repassado",
+  "Último repasse",
   "Status",
 ];
 
@@ -145,6 +146,7 @@ const REPASSES_STATUS_LABELS: Record<string, string> = {
   rejeitado: "Rejeitado",
   erro: "Erro",
   pendente: "Pendente",
+  sem_solicitacao: "Sem saque pedido",
 };
 
 export function downloadRepassesCsv(rows: RepasseRow[]) {
@@ -152,7 +154,8 @@ export function downloadRepassesCsv(rows: RepasseRow[]) {
     [
       escapeCsv(r.nome),
       escapeCsv(r.tipoParceiro),
-      escapeCsv(r.repassesFormatted),
+      escapeCsv(r.commissionAccruedFormatted),
+      escapeCsv(r.paidTotalFormatted),
       escapeCsv(r.ultimoRepasse),
       escapeCsv(REPASSES_STATUS_LABELS[r.status] ?? r.status),
     ].join(","),

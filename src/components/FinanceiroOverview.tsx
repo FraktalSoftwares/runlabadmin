@@ -15,6 +15,8 @@ import {
   YAxis,
   CartesianGrid,
   LegendProps,
+  Tooltip,
+  TooltipProps,
 } from "recharts";
 import { formatCurrency } from "@/lib/formatCurrency";
 import { useFinanceiroOverview } from "@/hooks/useFinanceiroOverview";
@@ -97,6 +99,24 @@ function CustomLegend({ payload }: LegendProps) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function PieTooltip({ active, payload }: TooltipProps<number, string>) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0];
+  const data = item.payload as { name: string; value: number; amount?: number };
+  const amount = typeof data.amount === "number" ? data.amount : null;
+  return (
+    <div className="rounded-md border border-border bg-popover px-3 py-2 shadow-md">
+      <p className="text-xs font-medium text-popover-foreground">{data.name}</p>
+      {amount !== null && (
+        <p className="text-sm font-semibold text-popover-foreground">
+          {formatCurrency(amount)}
+        </p>
+      )}
+      <p className="text-xs text-muted-foreground">{data.value}%</p>
     </div>
   );
 }
@@ -334,6 +354,7 @@ export const FinanceiroOverview = () => {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
+              <Tooltip content={<PieTooltip />} />
               <Legend
                 content={<CustomLegend />}
                 layout="vertical"
@@ -364,6 +385,7 @@ export const FinanceiroOverview = () => {
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
+              <Tooltip content={<PieTooltip />} />
               <Legend
                 content={<CustomLegend />}
                 layout="vertical"

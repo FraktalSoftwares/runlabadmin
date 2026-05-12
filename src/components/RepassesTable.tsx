@@ -17,6 +17,7 @@ function StatusBadge({ status }: { status: RepasseStatus }) {
     pago: { bg: "bg-[#B0E8D1]", text: "text-[#174F38]", label: "Pago" },
     erro: { bg: "bg-[#EEAFAA]", text: "text-[#551611]", label: "Erro" },
     rejeitado: { bg: "bg-[#EEAFAA]", text: "text-[#551611]", label: "Rejeitado" },
+    sem_solicitacao: { bg: "bg-[#3A3A3A]", text: "text-[#B2B2B2]", label: "Sem saque pedido" },
   };
 
   const c = config[status] ?? config.em_processamento;
@@ -71,6 +72,7 @@ export const RepassesTable = ({
             <TableRow className="bg-[#4D4D4D] hover:bg-[#4D4D4D] border-b border-[#808080]">
               <TableHead className="text-xs font-medium text-[#E0E0E0]">Nome</TableHead>
               <TableHead className="text-xs font-medium text-[#E0E0E0]">Tipo de parceiro</TableHead>
+              <TableHead className="text-xs font-medium text-[#E0E0E0]">Comissão acumulada</TableHead>
               <TableHead className="text-xs font-medium text-[#E0E0E0]">Total já repassado</TableHead>
               <TableHead className="text-xs font-medium text-[#E0E0E0]">Último repasse</TableHead>
               <TableHead className="text-xs font-medium text-[#E0E0E0]">Status</TableHead>
@@ -80,22 +82,23 @@ export const RepassesTable = ({
             {rows.length === 0 ? (
               <TableRow className="bg-[#262626] hover:bg-[#262626]">
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-center text-muted-foreground py-12"
                 >
-                  Nenhuma solicitação de repasse encontrada.
+                  Nenhum parceiro com comissão ou solicitação de repasse encontrado.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
                 <TableRow
-                  key={row.id}
+                  key={row.partnerId}
                   className="border-b border-[#808080] hover:bg-muted/30 transition-colors bg-[#262626] cursor-pointer"
                   onClick={() => onRowClick(row)}
                 >
                   <TableCell className="text-sm text-[#E0E0E0]">{row.nome}</TableCell>
                   <TableCell className="text-sm text-[#E0E0E0]">{row.tipoParceiro}</TableCell>
-                  <TableCell className="text-sm text-[#E0E0E0]">{row.repassesFormatted}</TableCell>
+                  <TableCell className="text-sm text-[#CCF725] font-medium">{row.commissionAccruedFormatted}</TableCell>
+                  <TableCell className="text-sm text-[#E0E0E0]">{row.paidTotalFormatted}</TableCell>
                   <TableCell className="text-sm text-[#E0E0E0]">{row.ultimoRepasse}</TableCell>
                   <TableCell>
                     <StatusBadge status={row.status} />

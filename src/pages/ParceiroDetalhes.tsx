@@ -47,7 +47,15 @@ const ParceiroDetalhes = () => {
     );
   }
 
-  const repasses: { data: string; valor: string; descricao: string; status: string }[] = [];
+  const repasses = parceiro.repasses;
+  const comissoes = parceiro.comissoes;
+
+  const statusLabel: Record<string, { label: string; variant: "success" | "destructive" | "default" }> = {
+    pago: { label: "Pago", variant: "success" },
+    aprovado: { label: "Aprovado", variant: "default" },
+    pendente: { label: "Pendente", variant: "default" },
+    rejeitado: { label: "Rejeitado", variant: "destructive" },
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -269,7 +277,7 @@ const ParceiroDetalhes = () => {
         {/* Stats Cards */}
         <div className="mb-6">
           <h2 className="text-xl font-semibold text-foreground mb-4">Histórico de participação em competições</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-[#2a2a2a] border-0">
               <CardContent className="p-6">
                 <p className="text-xs text-muted-foreground mb-2">Nº de provas concluídas</p>
@@ -284,11 +292,61 @@ const ParceiroDetalhes = () => {
             </Card>
             <Card className="bg-[#2a2a2a] border-0">
               <CardContent className="p-6">
+                <p className="text-xs text-muted-foreground mb-2">Comissão acumulada</p>
+                <p className="text-3xl font-bold text-success">{parceiro.stats.comissaoAcumulada}</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-[#2a2a2a] border-0">
+              <CardContent className="p-6">
                 <p className="text-xs text-muted-foreground mb-2">Total de repasses já recebidos</p>
-                <p className="text-3xl font-bold text-foreground">{parceiro.stats.receita}</p>
+                <p className="text-3xl font-bold text-foreground">{parceiro.stats.repassesPagos}</p>
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Comissões Section */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-foreground mb-4">Histórico de comissões geradas</h2>
+          <Card className="bg-card border-0 rounded-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-table-header">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Data</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Competição</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Valor</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {comissoes.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-muted-foreground text-sm">
+                        Nenhuma comissão gerada.
+                      </td>
+                    </tr>
+                  ) : (
+                    comissoes.map((c, index) => (
+                      <tr
+                        key={c.id}
+                        className={`border-t border-border ${index % 2 === 0 ? "bg-table-row" : ""}`}
+                      >
+                        <td className="px-6 py-4 text-sm text-foreground">{c.data}</td>
+                        <td className="px-6 py-4 text-sm text-foreground">{c.competicao}</td>
+                        <td className="px-6 py-4 text-sm text-success font-medium">{c.valor}</td>
+                        <td className="px-6 py-4">
+                          <Badge variant={c.status === "confirmed" ? "success" : "default"}>
+                            {c.status === "confirmed" ? "Confirmada" : "Pendente"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
 
         {/* Repasses Section */}
@@ -299,9 +357,9 @@ const ParceiroDetalhes = () => {
               <table className="w-full">
                 <thead className="bg-table-header">
                   <tr>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Data de repasse</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Data</th>
                     <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Valor</th>
-                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Descrição resumida financeiro</th>
+                    <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Descrição</th>
                     <th className="px-6 py-3 text-left text-sm font-medium" style={{ color: '#E0E0E0' }}>Status</th>
                   </tr>
                 </thead>
@@ -313,21 +371,22 @@ const ParceiroDetalhes = () => {
                       </td>
                     </tr>
                   ) : (
-                    repasses.map((repasse, index) => (
-                      <tr
-                        key={index}
-                        className={`border-t border-border ${index % 2 === 0 ? "bg-table-row" : ""}`}
-                      >
-                        <td className="px-6 py-4 text-sm text-foreground">{repasse.data}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{repasse.valor}</td>
-                        <td className="px-6 py-4 text-sm text-foreground">{repasse.descricao}</td>
-                        <td className="px-6 py-4">
-                          <Badge variant={repasse.status === "Concluído" ? "success" : "destructive"}>
-                            {repasse.status}
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
+                    repasses.map((repasse, index) => {
+                      const cfg = statusLabel[repasse.status] ?? { label: repasse.status, variant: "default" as const };
+                      return (
+                        <tr
+                          key={repasse.id}
+                          className={`border-t border-border ${index % 2 === 0 ? "bg-table-row" : ""}`}
+                        >
+                          <td className="px-6 py-4 text-sm text-foreground">{repasse.data}</td>
+                          <td className="px-6 py-4 text-sm text-foreground">{repasse.valor}</td>
+                          <td className="px-6 py-4 text-sm text-foreground">{repasse.descricao}</td>
+                          <td className="px-6 py-4">
+                            <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

@@ -14,6 +14,7 @@ export interface OverviewMetrics {
 export interface PieDataItem {
   name: string;
   value: number;
+  amount: number;
   color: string;
 }
 
@@ -25,8 +26,8 @@ export interface MonthlyBarItem {
 
 const RECEIPT_COLORS: Record<string, string> = {
   Inscrição: "#CCF725",
-  Assinatura: "#E8F5A0",
-  Avulso: "#B3D91F",
+  Assinatura: "#5BC0EB",
+  Avulso: "#FF8A4C",
 };
 
 const PARTNER_COLOR_PALETTE = ["#CCF725", "#8B9D00", "#E8F5A0", "#5A6700", "#D4FF66", "#A8C400"];
@@ -93,7 +94,18 @@ async function fetchOverviewData(year: number, month: number) {
 
   const regsList = regs ?? [];
   const inscricoesPagas = regsList.filter((r) => r.status === "confirmed").length;
-  const inscricoesEmAberto = regsList.filter((r) => r.status === "pending").length;
+
+  // "Em aberto" reflete pagamentos em aberto (PENDING/OVERDUE) criados no
+  // período. Mesma fonte da aba Recebimentos, para os dois números baterem
+  // quando filtrados pelo mesmo período.
+  const { data: pendingPayments, error: pendingErr } = await supabase
+    .from("runner_payments")
+    .select("id", { count: "exact" })
+    .in("status", ["PENDING", "OVERDUE"])
+    .gte("created_at", start)
+    .lte("created_at", end);
+  if (pendingErr) throw pendingErr;
+  const inscricoesEmAberto = pendingPayments?.length ?? 0;
 
   // ── 4) Gráfico de pizza: receita por tipo ────────────────────────
   const totalReceita = faturamentoTotal || 1;
@@ -105,13 +117,14 @@ async function fetchOverviewData(year: number, month: number) {
       receiptPie.push({
         name,
         value: Math.round((value / totalReceita) * 100),
+        amount: Math.round(value * 100) / 100,
         color: RECEIPT_COLORS[name],
       });
     }
   });
 
   if (receiptPie.length === 0) {
-    receiptPie.push({ name: "Nenhuma receita", value: 100, color: "#666" });
+    receiptPie.push({ name: "Nenhuma receita", value: 100, amount: 0, color: "#666" });
   }
 
   // ── 5) Gráfico de pizza: comissão por tipo de parceiro ──────────
@@ -150,24 +163,17 @@ async function fetchOverviewData(year: number, month: number) {
         .map(([name, value], index) => ({
           name,
           value: Math.round((value / totalCommission) * 100),
+          amount: Math.round(value * 100) / 100,
           color: name === "Não classificado"
             ? PARTNER_UNCLASSIFIED_COLOR
             : PARTNER_COLOR_PALETTE[index % PARTNER_COLOR_PALETTE.length],
         }))
-    : [{ name: "Sem comissões no período", value: 100, color: PARTNER_UNCLASSIFIED_COLOR }];
+    : [{ name: "Sem comissões no período", value: 100, amount: 0, color: PARTNER_UNCLASSIFIED_COLOR }];
 
   // ── 6) Margem e comissão ─────────────────────────────────────────
-  // Comissão paga = repasses efetivados (paid_at no período).
-  const { data: paidWithdrawals } = await supabase
-    .from("partner_withdrawal_requests")
-    .select("amount, paid_at")
-    .not("paid_at", "is", null)
-    .gte("paid_at", start)
-    .lte("paid_at", end);
-
-  const comissaoParceiros = Math.round(
-    (paidWithdrawals ?? []).reduce((acc, w) => acc + Number(w.amount), 0) * 100,
-  ) / 100;
+  // Comissão acumulada no período (partner_commissions criadas no período).
+  // Reflete performance dos parceiros, não fluxo de caixa de saques.
+  const comissaoParceiros = Math.round(totalCommission * 100) / 100;
   const margemBruta = Math.round((faturamentoTotal - comissaoParceiros) * 100) / 100;
 
   const metrics: OverviewMetrics = {
@@ -215,7 +221,6 @@ export function useFinanceiroOverview(year: number, month: number) {
       "competition_registrations",
       "profiles",
       "partner_commissions",
-      "partner_withdrawal_requests",
       "partnership_requests",
     ],
     [["financeiro-overview"]],

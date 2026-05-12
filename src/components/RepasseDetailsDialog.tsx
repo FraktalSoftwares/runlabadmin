@@ -22,6 +22,7 @@ function StatusBadge({ status }: { status: RepasseStatus }) {
     pago: { bg: "bg-[#B0E8D1]", text: "text-[#174F38]", label: "Pago" },
     erro: { bg: "bg-[#EEAFAA]", text: "text-[#551611]", label: "Erro" },
     rejeitado: { bg: "bg-[#EEAFAA]", text: "text-[#551611]", label: "Rejeitado" },
+    sem_solicitacao: { bg: "bg-[#3A3A3A]", text: "text-[#B2B2B2]", label: "Sem saque pedido" },
   };
   const c = config[status] ?? config.em_processamento;
   return (

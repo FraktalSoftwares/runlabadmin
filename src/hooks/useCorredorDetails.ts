@@ -59,6 +59,15 @@ export type CorredorDetails = {
 
 function formatDate(d: string | null): string {
   if (!d) return "—";
+  // Postgres DATE columns (e.g. birth_date) come as "YYYY-MM-DD". `new Date(...)`
+  // parses that as UTC midnight and `.toLocaleDateString("pt-BR")` then shifts
+  // it back by the UTC offset, showing the previous day in BR (UTC-3). Build
+  // the BR-formatted string directly from the parts to keep the calendar date.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+  if (dateOnly) {
+    const [, y, m, day] = dateOnly;
+    return `${day}/${m}/${y}`;
+  }
   return new Date(d).toLocaleDateString("pt-BR");
 }
 

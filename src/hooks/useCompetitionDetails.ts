@@ -592,7 +592,8 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Melhor corrida de cada corredor (view), ordenado por distância desc e pace asc
+      // Melhor corrida de cada corredor (view), ordenado por pace asc
+      // (menor pace = melhor colocação). Desempate por distância desc.
       const {
         data: runs,
         error: runsError,
@@ -604,8 +605,8 @@ export function useCompetitionRanking(
           { count: "exact" }
         )
         .eq("competition_id", competitionId)
+        .order("avg_pace_seconds_per_km", { ascending: true, nullsFirst: false })
         .order("distance_meters", { ascending: false })
-        .order("avg_pace_seconds_per_km", { ascending: true })
         .range(from, to);
 
       if (runsError) throw runsError;
@@ -781,8 +782,8 @@ export async function exportRankingCsv(competitionId: string) {
       "id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds"
     )
     .eq("competition_id", competitionId)
-    .order("distance_meters", { ascending: false })
-    .order("avg_pace_seconds_per_km", { ascending: true });
+    .order("avg_pace_seconds_per_km", { ascending: true, nullsFirst: false })
+    .order("distance_meters", { ascending: false });
 
   if (runsError) throw runsError;
   if (!runs || runs.length === 0) {

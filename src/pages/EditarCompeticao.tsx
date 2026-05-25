@@ -51,6 +51,13 @@ const STANDARD_DISTANCE_METERS: Record<string, number> = {
 };
 
 /** Normaliza label de distância para comparação (tolera "5km" vs "5 km"). */
+function extractStoragePath(publicUrl: string): string | null {
+  const marker = "/storage/v1/object/public/sistema/";
+  const idx = publicUrl.indexOf(marker);
+  if (idx < 0) return null;
+  return publicUrl.substring(idx + marker.length);
+}
+
 const normalizeDistanceLabel = (label: string): string =>
   label.toLowerCase().replace(/\s+/g, "");
 
@@ -126,6 +133,8 @@ const EditarCompeticao = () => {
   const [documento1, setDocumento1] = useState<File | null>(null);
   const [documento2, setDocumento2] = useState<File | null>(null);
   const [documento3, setDocumento3] = useState<File | null>(null);
+  const [existingDocs, setExistingDocs] = useState<{ id: string; title: string; fileUrl: string }[]>([]);
+  const [removedDocIds, setRemovedDocIds] = useState<string[]>([]);
   const [selectedDistances, setSelectedDistances] = useState<string[]>([]);
   const [outraDistanciaInput, setOutraDistanciaInput] = useState<string>("");
   const [availableChampionships, setAvailableChampionships] = useState<{ id: string; name: string }[]>([]);
@@ -193,6 +202,14 @@ const EditarCompeticao = () => {
     });
     if (competition.coverImageUrl) setPreviewUrl(competition.coverImageUrl);
     setSelectedSponsorIds(competition.sponsors?.map((s) => s.id) ?? []);
+    setExistingDocs(
+      (competition.documents ?? []).map((d) => ({
+        id: d.id,
+        title: d.title,
+        fileUrl: d.fileUrl,
+      })),
+    );
+    setRemovedDocIds([]);
   }, [competition, form]);
 
   // Carregar lista de patrocinadores da tabela competition_sponsors
@@ -452,6 +469,59 @@ const EditarCompeticao = () => {
                 });
               if (insertLotError) throw insertLotError;
             }
+          }
+        }
+      }
+
+      // Sincronizar documentos: deletar marcados pra remoção + upload dos novos.
+      if (id) {
+        if (removedDocIds.length > 0) {
+          const docsToDelete = (competition?.documents ?? []).filter((d) =>
+            removedDocIds.includes(d.id),
+          );
+          const storagePaths = docsToDelete
+            .map((d) => extractStoragePath(d.fileUrl))
+            .filter((p): p is string => p !== null);
+          if (storagePaths.length > 0) {
+            await supabase.storage.from("sistema").remove(storagePaths);
+          }
+          const { error: deleteDocsError } = await supabase
+            .from("competition_documents")
+            .delete()
+            .in("id", removedDocIds);
+          if (deleteDocsError) throw deleteDocsError;
+        }
+
+        const newDocs = [documento1, documento2, documento3].filter(
+          (f): f is File => f != null,
+        );
+        if (newDocs.length > 0) {
+          const baseSortOrder = existingDocs.filter(
+            (d) => !removedDocIds.includes(d.id),
+          ).length;
+          for (let i = 0; i < newDocs.length; i++) {
+            const file = newDocs[i];
+            const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+            const path = `competitions/${id}/documents/${Date.now()}-${i}.${ext}`;
+            const { error: uploadDocError } = await supabase.storage
+              .from("sistema")
+              .upload(path, file, {
+                upsert: true,
+                contentType: file.type || "application/octet-stream",
+              });
+            if (uploadDocError) throw uploadDocError;
+            const { data: urlData } = supabase.storage
+              .from("sistema")
+              .getPublicUrl(path);
+            const { error: insertDocError } = await supabase
+              .from("competition_documents")
+              .insert({
+                competition_id: id,
+                title: file.name,
+                file_url: urlData.publicUrl,
+                sort_order: baseSortOrder + i,
+              });
+            if (insertDocError) throw insertDocError;
           }
         }
       }
@@ -859,13 +929,25 @@ const EditarCompeticao = () => {
                 </div>
 
                 {form.watch("numeroMaximoInscritos") && (
-                  <div className="ml-7">
+                  <div className="ml-7 space-y-2">
                     <Input
                       type="number"
                       placeholder="Ex: 100"
                       {...form.register("maxInscritos")}
                       className="bg-[#1A1A1A] border-border/30 w-48"
                     />
+                    {competition?.stats && (() => {
+                      const inscritos = competition.stats.totalAthletes;
+                      const maxValue = Number.parseInt(form.watch("maxInscritos") || "0", 10) || 0;
+                      const lotado = maxValue > 0 && inscritos >= maxValue;
+                      return (
+                        <p className={`text-sm ${lotado ? "text-red-400" : "text-muted-foreground"}`}>
+                          Inscritos atuais: {inscritos}
+                          {maxValue > 0 ? ` / ${maxValue}` : ""}
+                          {lotado ? " — Lotada" : ""}
+                        </p>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -1165,6 +1247,41 @@ const EditarCompeticao = () => {
           <div className="mt-6">
             <div className="rounded-[20px] border border-border/50 bg-[#2A2A2A] p-8">
               <h2 className="text-lg font-semibold mb-6">Documentos</h2>
+
+              {existingDocs.filter((d) => !removedDocIds.includes(d.id)).length > 0 && (
+                <div className="mb-4 space-y-2">
+                  <p className="text-sm text-muted-foreground">Documentos já enviados:</p>
+                  {existingDocs
+                    .filter((d) => !removedDocIds.includes(d.id))
+                    .map((d) => (
+                      <div
+                        key={d.id}
+                        className="flex items-center justify-between gap-2 rounded-md bg-[#1A1A1A] px-3 py-2"
+                      >
+                        <a
+                          href={d.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs truncate"
+                          style={{ color: "#CCF725" }}
+                        >
+                          {d.title}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRemovedDocIds((prev) => [...prev, d.id])
+                          }
+                          className="w-5 h-5 rounded-full flex items-center justify-center hover:brightness-90"
+                          style={{ backgroundColor: "#CCF725" }}
+                          title="Remover"
+                        >
+                          <X className="w-3 h-3" style={{ color: "#1A1A1A" }} />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-4">
                 {/* Documento 1 */}

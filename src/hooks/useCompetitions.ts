@@ -16,6 +16,7 @@ export type CompetitionRow = {
   formato: string;
   campeonato: string;
   status: CompetitionStatus;
+  endsAt: string | null;
 };
 
 type DbStatus = "draft" | "open" | "closed" | "in_progress" | "finished";
@@ -88,7 +89,7 @@ function periodToDate(periodo: string | undefined): string | null {
 async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): Promise<CompetitionRow[]> {
   let query = supabase
     .from("competitions")
-    .select("id, title, subtitle, mode, format_type, status, is_free, starts_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at, championship_id")
+    .select("id, title, subtitle, mode, format_type, status, is_free, starts_at, ends_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at, championship_id")
     .order("created_at", { ascending: false });
 
   const dbStatus = statusToDb(filters.status);
@@ -161,6 +162,7 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
     formato: formatLabel(c.format_type),
     campeonato: c.championship_id ? (championshipNames[c.championship_id] ?? "-") : "-",
     status: mapStatus(c.status as DbStatus),
+    endsAt: c.ends_at ?? null,
   }));
 }
 

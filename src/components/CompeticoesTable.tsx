@@ -26,6 +26,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Pagination } from "@/components/Pagination";
@@ -108,6 +110,23 @@ export const CompeticoesTable = () => {
   const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<CompetitionRow | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [closeConfirmText, setCloseConfirmText] = useState("");
+
+  useEffect(() => {
+    if (!closeDialogOpen) setCloseConfirmText("");
+  }, [closeDialogOpen]);
+
+  const formatRemaining = (endsAt: string | null): string | null => {
+    if (!endsAt) return null;
+    const end = new Date(endsAt).getTime();
+    const diff = end - Date.now();
+    if (diff <= 0) return null;
+    const days = Math.floor(diff / 86_400_000);
+    const hours = Math.floor((diff % 86_400_000) / 3_600_000);
+    if (days > 0) return `${days}d ${hours}h`;
+    const minutes = Math.floor((diff % 3_600_000) / 60_000);
+    return `${hours}h ${minutes}min`;
+  };
 
   useEffect(() => {
     setPage(1);
@@ -461,10 +480,41 @@ export const CompeticoesTable = () => {
             <AlertDialogTitle className="text-xl font-semibold text-foreground">
               Encerrar competição manualmente?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              A competição <strong className="text-foreground">"{selectedItem?.nome}"</strong> será
-              marcada como finalizada. Novas inscrições e corridas não serão mais aceitas.
-              Essa ação pode ser revertida ativando a competição novamente.
+            <AlertDialogDescription asChild>
+              <div className="text-muted-foreground space-y-3">
+                <p>
+                  A competição <strong className="text-foreground">"{selectedItem?.nome}"</strong> será
+                  marcada como finalizada. Novas inscrições e corridas não serão mais aceitas.
+                  Essa ação pode ser revertida ativando a competição novamente.
+                </p>
+                {(() => {
+                  const remaining = formatRemaining(selectedItem?.endsAt ?? null);
+                  const inscritos = selectedItem?.inscritos ?? 0;
+                  if (!remaining) return null;
+                  return (
+                    <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-foreground">
+                      <p className="font-semibold text-yellow-300">Atenção: competição ainda em curso</p>
+                      <ul className="mt-2 list-disc list-inside text-sm space-y-1">
+                        <li>Prazo restante: <strong>{remaining}</strong></li>
+                        <li>Inscritos ativos: <strong>{inscritos}</strong></li>
+                      </ul>
+                      <div className="mt-3 space-y-2">
+                        <Label htmlFor="confirm-close-name" className="text-xs text-muted-foreground">
+                          Para confirmar, digite o nome exato da competição:
+                        </Label>
+                        <Input
+                          id="confirm-close-name"
+                          autoComplete="off"
+                          value={closeConfirmText}
+                          onChange={(e) => setCloseConfirmText(e.target.value)}
+                          placeholder={selectedItem?.nome ?? ""}
+                          className="bg-[#262626] border-border"
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-6">
@@ -476,9 +526,13 @@ export const CompeticoesTable = () => {
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-yellow-600 text-white hover:bg-yellow-600/90"
+              className="bg-yellow-600 text-white hover:bg-yellow-600/90 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleClose}
-              disabled={actionLoading}
+              disabled={
+                actionLoading ||
+                (!!formatRemaining(selectedItem?.endsAt ?? null) &&
+                  closeConfirmText.trim() !== (selectedItem?.nome ?? "").trim())
+              }
             >
               {actionLoading ? (
                 <>

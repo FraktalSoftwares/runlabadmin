@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { PERMISSION_GROUPS, getPermissionLabel, type PermissionKey } from "@/lib/permissions";
+import { getDefinirSenhaRedirectUrl } from "@/pages/DefinarSenha";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -51,6 +52,7 @@ export const AddUserSheet = ({ open, onOpenChange, onSuccess }: AddUserSheetProp
           email: trimmedEmail,
           full_name: name.trim() || undefined,
           permission_keys: permissionKeys,
+          redirect_to: getDefinirSenhaRedirectUrl(),
         },
         headers:
           session?.access_token != null

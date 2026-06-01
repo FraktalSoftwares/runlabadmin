@@ -3,10 +3,11 @@ import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useParams, Link } from "react-router-dom";
-import { ChevronRight, X, ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronRight, X, ChevronLeft, Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CorredorProfileDialog } from "@/components/CorredorProfileDialog";
 import { InativarParceiroDialog } from "@/components/InativarParceiroDialog";
+import { EditarCupomParceiroDialog } from "@/components/EditarCupomParceiroDialog";
 import { toast } from "sonner";
 import { useParceiroDetails } from "@/hooks/useParceiroDetails";
 import { supabase } from "@/lib/supabase";
@@ -16,6 +17,7 @@ const ParceiroDetalhes = () => {
   const { data: parceiro, loading, error, refetch } = useParceiroDetails(id);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
   const [isInativarDialogOpen, setIsInativarDialogOpen] = useState(false);
+  const [isCupomDialogOpen, setIsCupomDialogOpen] = useState(false);
 
   if (loading) {
     return (
@@ -182,14 +184,26 @@ const ParceiroDetalhes = () => {
         </Card>
 
         {/* Cupom / Código de Referência */}
-        {parceiro.referralCode && (
-          <Card className="mb-6 bg-[#2a2a2a] border-0">
-            <CardContent className="p-6">
+        <Card className="mb-6 bg-[#2a2a2a] border-0">
+          <CardContent className="p-6 flex items-center justify-between gap-4">
+            <div>
               <p className="text-xs text-muted-foreground mb-1">Cupom / Código de referência</p>
-              <p className="text-lg font-semibold text-success">{parceiro.referralCode}</p>
-            </CardContent>
-          </Card>
-        )}
+              {parceiro.referralCode ? (
+                <p className="text-lg font-semibold text-success">{parceiro.referralCode}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Nenhum cupom definido</p>
+              )}
+            </div>
+            <Button
+              onClick={() => setIsCupomDialogOpen(true)}
+              className="gap-2 border-0 hover:brightness-90 transition-all"
+              style={{ backgroundColor: '#1A1A1A', color: '#CCF725' }}
+            >
+              <Pencil className="w-4 h-4" />
+              Editar cupom
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* Dados Bancários */}
         <Card className="mb-6 bg-[#2a2a2a] border-0">
@@ -435,6 +449,62 @@ const ParceiroDetalhes = () => {
           } catch (e) {
             toast.error("Erro ao inativar", { description: e instanceof Error ? e.message : "Não foi possível inativar o parceiro." });
           }
+        }}
+      />
+
+      {/* Editar Cupom Dialog */}
+      <EditarCupomParceiroDialog
+        open={isCupomDialogOpen}
+        onOpenChange={setIsCupomDialogOpen}
+        currentCode={parceiro.referralCode}
+        parceiroNome={parceiro.name}
+        onConfirm={async (newCode) => {
+          const oldCode = parceiro.referralCode;
+
+          const { data: existing, error: checkErr } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("referral_code", newCode)
+            .neq("id", parceiro.id)
+            .maybeSingle();
+          if (checkErr) throw new Error(checkErr.message);
+          if (existing) throw new Error("Esse cupom já está em uso por outro parceiro.");
+
+          const { error: updErr } = await supabase
+            .from("profiles")
+            .update({ referral_code: newCode, updated_at: new Date().toISOString() })
+            .eq("id", parceiro.id);
+          if (updErr) {
+            if (updErr.code === "23505") throw new Error("Esse cupom já está em uso por outro parceiro.");
+            throw new Error(updErr.message);
+          }
+
+          let cascadeCount = 0;
+          if (oldCode && oldCode !== newCode) {
+            const { data: cascaded, error: cascadeErr } = await supabase
+              .from("profiles")
+              .update({ advisor_code: newCode, updated_at: new Date().toISOString() })
+              .eq("advisor_code", oldCode)
+              .select("id");
+            if (cascadeErr) {
+              toast.warning("Cupom do parceiro salvo, mas falhou ao atualizar runners", {
+                description: cascadeErr.message,
+              });
+              setIsCupomDialogOpen(false);
+              refetch();
+              return;
+            }
+            cascadeCount = cascaded?.length ?? 0;
+          }
+
+          toast.success("Cupom atualizado", {
+            description:
+              cascadeCount > 0
+                ? `Novo código: ${newCode}. ${cascadeCount} runner(s) atualizado(s).`
+                : `Novo código: ${newCode}`,
+          });
+          setIsCupomDialogOpen(false);
+          refetch();
         }}
       />
     </div>

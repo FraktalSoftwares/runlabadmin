@@ -62,7 +62,29 @@ export const AddUserSheet = ({ open, onOpenChange, onSuccess }: AddUserSheetProp
       const bodyError = (data as { error?: string; message?: string })?.error
         ?? (data as { error?: string; message?: string })?.message;
       if (bodyError) throw new Error(bodyError);
-      if (error) throw error;
+
+      if (error) {
+        // supabase-js trata respostas não-2xx como FunctionsHttpError e zera `data`.
+        // O corpo real (com a mensagem amigável) fica em error.context (Response clone).
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.clone === "function") {
+          try {
+            const body = await ctx.clone().json();
+            const msg = body?.error ?? body?.message ?? body?.msg;
+            if (msg) {
+              const friendly = /already been registered|email_exists/i.test(String(msg))
+                ? "E-mail já cadastrado no sistema."
+                : String(msg);
+              throw new Error(friendly);
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof Error && parseErr.message && parseErr.message !== "Failed to parse JSON") {
+              throw parseErr;
+            }
+          }
+        }
+        throw error;
+      }
 
       toast.success("Convite enviado! O usuário receberá um e-mail para definir a senha.");
       setName("");

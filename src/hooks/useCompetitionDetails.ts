@@ -112,6 +112,15 @@ export const formatPace = (seconds: number | null): string => {
   return `${min}:${sec.toString().padStart(2, "0")}/km`;
 };
 
+export const formatTime = (seconds: number | null): string => {
+  if (seconds == null || seconds <= 0) return "-";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+};
+
 export const formatDistanceKm = (meters: number): string => {
   if (meters >= 1000) {
     return `${(meters / 1000).toFixed(2).replace(".", ",")}km`;
@@ -592,21 +601,24 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Melhor corrida de cada corredor (view), ordenado por pace asc
-      // (menor pace = melhor colocação). Desempate por distância desc.
+      // Espelha o ranking do app mobile: v_competition_leaderboard já aplica
+      // os filtros de validação (>=99% da distância da prova + pace 210-1800
+      // s/km) e devolve `rank` particionado por distância. Filtramos apenas
+      // corridas finalizadas porque o admin lista etapa fechada.
       const {
         data: runs,
         error: runsError,
         count,
       } = await supabase
-        .from("competition_best_runs")
+        .from("v_competition_leaderboard")
         .select(
-          "id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds",
+          "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url",
           { count: "exact" }
         )
         .eq("competition_id", competitionId)
-        .order("avg_pace_seconds_per_km", { ascending: true, nullsFirst: false })
-        .order("distance_meters", { ascending: false })
+        .eq("state", "finished")
+        .order("distance_meters", { ascending: true })
+        .order("rank", { ascending: true })
         .range(from, to);
 
       if (runsError) throw runsError;
@@ -617,33 +629,15 @@ export function useCompetitionRanking(
         return;
       }
 
-      // Fetch profiles
-      const userIds = [...new Set(runs.map((r) => r.user_id))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, avatar_url")
-        .in("id", userIds);
-
-      const profileMap: Record<
-        string,
-        { full_name: string | null; avatar_url: string | null }
-      > = {};
-      (profiles || []).forEach((p) => {
-        profileMap[p.id] = p;
-      });
-
-      const rows: RankingRow[] = runs.map((r, index) => {
-        const profile = profileMap[r.user_id];
-        return {
-          position: from + index + 1,
-          userId: r.user_id,
-          userName: profile?.full_name || "Usuário desconhecido",
-          userAvatar: profile?.avatar_url || null,
-          paceSecondsPerKm: r.avg_pace_seconds_per_km,
-          distanceMeters: r.distance_meters,
-          totalTimeSeconds: r.total_time_seconds,
-        };
-      });
+      const rows: RankingRow[] = runs.map((r) => ({
+        position: r.rank,
+        userId: r.user_id,
+        userName: r.user_name || "Usuário desconhecido",
+        userAvatar: r.user_avatar_url || null,
+        paceSecondsPerKm: r.avg_pace_seconds_per_km,
+        distanceMeters: r.distance_meters,
+        totalTimeSeconds: r.total_time_seconds,
+      }));
 
       setData(rows);
     } catch (e) {
@@ -660,7 +654,7 @@ export function useCompetitionRanking(
     fetchRanking();
   }, [fetchRanking]);
 
-  useRealtimeRefetch(["competition_best_runs", "user_runs"], fetchRanking);
+  useRealtimeRefetch(["user_runs", "user_run_events"], fetchRanking);
 
   return { data, total, loading, error, refetch: fetchRanking };
 }
@@ -774,39 +768,30 @@ export async function exportRegistrationsCsv(competitionId: string) {
   downloadCsv(csv, `inscricoes-${competitionId}.csv`);
 }
 
-/** Exports ranking (best run per runner) as CSV */
+/** Exports ranking (best run per runner) as CSV — mesma fonte do app mobile */
 export async function exportRankingCsv(competitionId: string) {
   const { data: runs, error: runsError } = await supabase
-    .from("competition_best_runs")
+    .from("v_competition_leaderboard")
     .select(
-      "id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds"
+      "user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name"
     )
     .eq("competition_id", competitionId)
-    .order("avg_pace_seconds_per_km", { ascending: true, nullsFirst: false })
-    .order("distance_meters", { ascending: false });
+    .eq("state", "finished")
+    .order("distance_meters", { ascending: true })
+    .order("rank", { ascending: true });
 
   if (runsError) throw runsError;
   if (!runs || runs.length === 0) {
     throw new Error("Nenhum resultado no ranking para exportar");
   }
 
-  const userIds = [...new Set(runs.map((r) => r.user_id))];
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, full_name")
-    .in("id", userIds);
-
-  const profileMap: Record<string, string> = {};
-  (profiles || []).forEach((p) => {
-    profileMap[p.id] = p.full_name || "Desconhecido";
-  });
-
-  const headers = ["Posição", "Corredor", "Pace", "Distância"];
-  const rows = runs.map((r, i) => [
-    `${i + 1}º`,
-    profileMap[r.user_id] || "Desconhecido",
-    formatPace(r.avg_pace_seconds_per_km),
+  const headers = ["Distância", "Posição", "Corredor", "Pace", "Tempo"];
+  const rows = runs.map((r) => [
     formatDistanceKm(r.distance_meters),
+    `${r.rank}º`,
+    r.user_name || "Desconhecido",
+    formatPace(r.avg_pace_seconds_per_km),
+    formatTime(r.total_time_seconds),
   ]);
 
   const csv = generateCsv(headers, rows);

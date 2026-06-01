@@ -601,10 +601,11 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Espelha o ranking do app mobile: v_competition_leaderboard já aplica
-      // os filtros de validação (>=99% da distância da prova + pace 210-1800
-      // s/km) e devolve `rank` particionado por distância. Filtramos apenas
-      // corridas finalizadas porque o admin lista etapa fechada.
+      // Espelha exatamente o ranking do app mobile: v_competition_leaderboard
+      // aplica filtros de validação (>=99% da distância + pace 210-1800 s/km)
+      // para corridas finalizadas, mas inclui corridas em curso/paused sem
+      // validação (mesmo critério do app). Aqui NÃO filtramos state pra evitar
+      // divergência — runs paused que apareciam no app sumiam do admin.
       const {
         data: runs,
         error: runsError,
@@ -612,11 +613,10 @@ export function useCompetitionRanking(
       } = await supabase
         .from("v_competition_leaderboard")
         .select(
-          "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url",
+          "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state",
           { count: "exact" }
         )
         .eq("competition_id", competitionId)
-        .eq("state", "finished")
         .order("distance_meters", { ascending: true })
         .order("rank", { ascending: true })
         .range(from, to);
@@ -776,7 +776,6 @@ export async function exportRankingCsv(competitionId: string) {
       "user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name"
     )
     .eq("competition_id", competitionId)
-    .eq("state", "finished")
     .order("distance_meters", { ascending: true })
     .order("rank", { ascending: true });
 

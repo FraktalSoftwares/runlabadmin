@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Plus } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ArrowLeft, Upload, Check, CalendarIcon } from "lucide-react";
+import { ArrowLeft, Upload, Check, CalendarIcon, CloudUpload, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -85,6 +85,26 @@ const CadastrarCampeonato = () => {
     { id: 1, nome: "", valor: "", descricao: "", permitirCreditos: false, possuiKit: "sim" }
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [documento1, setDocumento1] = useState<File | null>(null);
+  const [documento2, setDocumento2] = useState<File | null>(null);
+  const [documento3, setDocumento3] = useState<File | null>(null);
+
+  const handleDocumentoChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setDoc: (file: File | null) => void,
+  ) => {
+    const file = e.target.files?.[0];
+    if (file) setDoc(file);
+  };
+
+  const handleDocumentoDrop = (
+    e: React.DragEvent,
+    setDoc: (file: File | null) => void,
+  ) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) setDoc(file);
+  };
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
@@ -304,6 +324,35 @@ const CadastrarCampeonato = () => {
       if (lotRows.length > 0) {
         const { error: lotError } = await supabase.from("competition_lots").insert(lotRows);
         if (lotError) throw lotError;
+      }
+
+      // Upload de documentos opcionais (até 3).
+      const docFiles = [documento1, documento2, documento3].filter(
+        (f): f is File => f != null,
+      );
+      for (let i = 0; i < docFiles.length; i++) {
+        const file = docFiles[i];
+        const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+        const path = `competitions/${competitionId}/documents/${Date.now()}-${i}.${ext}`;
+        const { error: uploadDocError } = await supabase.storage
+          .from("sistema")
+          .upload(path, file, {
+            upsert: true,
+            contentType: file.type || "application/octet-stream",
+          });
+        if (uploadDocError) throw uploadDocError;
+        const { data: urlData } = supabase.storage
+          .from("sistema")
+          .getPublicUrl(path);
+        const { error: insertDocError } = await supabase
+          .from("competition_documents")
+          .insert({
+            competition_id: competitionId,
+            title: file.name,
+            file_url: urlData.publicUrl,
+            sort_order: i,
+          });
+        if (insertDocError) throw insertDocError;
       }
 
       toast.success(status === "draft" ? "Rascunho salvo!" : "Competição publicada!");
@@ -1005,9 +1054,70 @@ const CadastrarCampeonato = () => {
             </div>
           </div>
 
+          {/* Documentos */}
+          <div className="space-y-6 bg-card border border-border/50 rounded-2xl p-8">
+            <h2 className="text-lg font-semibold text-foreground mb-6">Documentos (opcional)</h2>
+            <p className="text-sm text-muted-foreground -mt-4 mb-2">
+              Envie até 3 documentos (regulamento, edital, etc). Eles ficam disponíveis para download no app.
+            </p>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { file: documento1, setter: setDocumento1, key: "documento1" },
+                { file: documento2, setter: setDocumento2, key: "documento2" },
+                { file: documento3, setter: setDocumento3, key: "documento3" },
+              ].map(({ file, setter, key }) => (
+                <div
+                  key={key}
+                  className="relative rounded-[20px] bg-[#1A1A1A] p-8 flex flex-col items-center justify-center gap-3 min-h-[200px]"
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleDocumentoDrop(e, setter)}
+                >
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center"
+                    style={{ backgroundColor: "#CCF725" }}
+                  >
+                    <CloudUpload className="w-6 h-6" style={{ color: "#1A1A1A" }} />
+                  </div>
+                  <p className="text-xs text-center" style={{ color: "#CCF725" }}>
+                    Arraste e solte o arquivo aqui
+                  </p>
+                  <input
+                    type="file"
+                    id={`${key}-upload`}
+                    className="hidden"
+                    onChange={(e) => handleDocumentoChange(e, setter)}
+                  />
+                  <label htmlFor={`${key}-upload`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="cursor-pointer border-[#CCF725] text-[#CCF725] hover:bg-[#CCF725] hover:text-[#1A1A1A] bg-transparent text-xs"
+                      asChild
+                    >
+                      <span>Procurar arquivo</span>
+                    </Button>
+                  </label>
+                  {file && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <p className="text-xs text-[#CCF725] truncate max-w-[120px]">{file.name}</p>
+                      <button
+                        type="button"
+                        onClick={() => setter(null)}
+                        className="w-5 h-5 rounded-full flex items-center justify-center hover:brightness-90"
+                        style={{ backgroundColor: "#CCF725" }}
+                      >
+                        <X className="w-3 h-3" style={{ color: "#1A1A1A" }} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Botão final */}
           <div className="flex justify-end pt-4">
-            <Button 
+            <Button
               type="submit"
               className="bg-[#CCF725] text-[#171717] hover:bg-[#CCF725]/90 font-semibold px-8"
               disabled={isSubmitting}

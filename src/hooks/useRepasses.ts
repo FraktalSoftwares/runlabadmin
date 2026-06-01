@@ -188,12 +188,18 @@ async function fetchRepasses(search?: string): Promise<RepasseRow[]> {
     };
   });
 
-  // Pending withdrawal requests first; then by commission accrued desc.
+  // Pending withdrawal requests first; depois pela data mais recente
+  // (último pagamento, ou solicitação se ainda não pago). Sem atividade
+  // vai pro fim com sortKey 0.
+  const sortKey = (r: RepasseRow) => {
+    const iso = r.paidAt ?? r.requestedAt;
+    return iso ? new Date(iso).getTime() : 0;
+  };
   rows.sort((a, b) => {
     const aPending = a.status === "pendente" ? 0 : 1;
     const bPending = b.status === "pendente" ? 0 : 1;
     if (aPending !== bPending) return aPending - bPending;
-    return b.commissionAccrued - a.commissionAccrued;
+    return sortKey(b) - sortKey(a);
   });
 
   if (search?.trim()) {

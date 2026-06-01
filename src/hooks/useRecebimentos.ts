@@ -135,23 +135,32 @@ async function fetchRecebimentos(search?: string): Promise<RecebimentoRow[]> {
     }
   }
 
-  // 4) Montar rows
-  const rows: RecebimentoRow[] = payments.map((p) => {
+  // 4) Montar rows + ordenar pela data exibida (paid_at quando houver,
+  //    senão created_at). A query veio por created_at mas o display usa
+  //    paid_at quando disponível — sem este reorder a lista parece bagunçada.
+  const rowsWithDate = payments.map((p) => {
     const tipoRecebimento = p.plan_type === "anual" ? "Assinatura" : "Inscrição";
     const competicao = compNameByPayment[p.id] ?? (p.description || "-");
+    const sortDate = p.paid_at ?? p.created_at;
 
     return {
-      id: p.id,
-      shortId: p.id.slice(0, 7).replace(/-/g, ""),
-      nome: nameMap[p.user_id] ?? "Usuário",
-      tipoRecebimento,
-      competicao: tipoRecebimento === "Assinatura" ? "-" : competicao,
-      valor: Number(p.amount),
-      data: formatDate(p.paid_at ?? p.created_at),
-      pagamento: BILLING_LABELS[p.billing_type] ?? p.billing_type,
-      status: mapStatus(p.status),
+      row: {
+        id: p.id,
+        shortId: p.id.slice(0, 7).replace(/-/g, ""),
+        nome: nameMap[p.user_id] ?? "Usuário",
+        tipoRecebimento,
+        competicao: tipoRecebimento === "Assinatura" ? "-" : competicao,
+        valor: Number(p.amount),
+        data: formatDate(sortDate),
+        pagamento: BILLING_LABELS[p.billing_type] ?? p.billing_type,
+        status: mapStatus(p.status),
+      } as RecebimentoRow,
+      sortKey: sortDate ? new Date(sortDate).getTime() : 0,
     };
   });
+
+  rowsWithDate.sort((a, b) => b.sortKey - a.sortKey);
+  const rows: RecebimentoRow[] = rowsWithDate.map((x) => x.row);
 
   // 5) Filtro de busca (nome ou competição)
   if (search?.trim()) {

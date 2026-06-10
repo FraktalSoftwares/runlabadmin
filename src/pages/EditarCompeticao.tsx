@@ -290,10 +290,16 @@ const EditarCompeticao = () => {
     const data = result.data;
     setIsSaving(true);
     try {
+      const toEndOfDayIso = (d: Date | undefined | null): string | null => {
+        if (!d) return null;
+        const end = new Date(d);
+        end.setHours(23, 59, 59, 999);
+        return end.toISOString();
+      };
       const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
-      const endsAt = data.competicaoFim?.toISOString() ?? null;
+      const endsAt = toEndOfDayIso(data.competicaoFim);
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
-      const regEnd = data.inscricaoFim?.toISOString() ?? null;
+      const regEnd = toEndOfDayIso(data.inscricaoFim);
       const isFree = data.tipoCompeticao === "gratuita";
       const championshipId = data.campeonato && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
       const maxRegistrations = data.numeroMaximoInscritos && data.maxInscritos?.trim()

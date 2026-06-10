@@ -198,14 +198,20 @@ const CadastrarCampeonato = () => {
     }
     setIsSubmitting(true);
     try {
+      const toEndOfDayIso = (d: Date | undefined | null): string | null => {
+        if (!d) return null;
+        const end = new Date(d);
+        end.setHours(23, 59, 59, 999);
+        return end.toISOString();
+      };
       const startsAt = data.competicaoInicio
         ? data.competicaoInicio.toISOString()
         : data.inscricaoFim
           ? data.inscricaoFim.toISOString()
           : new Date().toISOString();
-      const endsAt = data.competicaoFim?.toISOString() ?? null;
+      const endsAt = toEndOfDayIso(data.competicaoFim);
       const regStart = data.inscricaoInicio?.toISOString() ?? null;
-      const regEnd = data.inscricaoFim?.toISOString() ?? null;
+      const regEnd = toEndOfDayIso(data.inscricaoFim);
       const isFree = data.tipoCompeticao === "gratuita" || lotes.every((l) => parseValorToCents(l.valor) === 0);
       const championshipId =
         data.campeonato && data.campeonato !== "none" && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;

@@ -1,9 +1,7 @@
-import { useEffect, useRef } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { TIPO_USER_ADMIN } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ShieldAlert, LogOut } from "lucide-react";
 
@@ -19,24 +17,9 @@ export function AdminGuard() {
   const { user, profile, profileLoading, loading, signOut } = useAuth();
   const { hasPermission, isLoading: permissionsLoading } = usePermissions();
   const location = useLocation();
-  const alertShown = useRef(false);
   const isAdmin = profile?.tipo_user === TIPO_USER_ADMIN;
   const requiredPerm = getRequiredPermission(location.pathname);
   const hasRouteAccess = !requiredPerm || hasPermission(requiredPerm);
-
-  useEffect(() => {
-    if (loading || profileLoading || !user) return;
-    if (!isAdmin) {
-      if (!alertShown.current) {
-        alertShown.current = true;
-        toast.error("Você não tem permissão para acessar o painel administrativo.", {
-          duration: 6000,
-        });
-      }
-    } else {
-      alertShown.current = false;
-    }
-  }, [loading, profileLoading, user, profile, isAdmin]);
 
   if (loading || profileLoading || (isAdmin && permissionsLoading)) {
     return (

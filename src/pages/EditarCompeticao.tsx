@@ -340,9 +340,13 @@ const EditarCompeticao = () => {
           throw new Error(`Falha ao enviar imagem da capa: ${uploadError.message}`);
         }
         const { data: urlData } = supabase.storage.from("sistema").getPublicUrl(path);
+        // Cache-bust: path é determinístico (upsert no mesmo arquivo), então a URL pública
+        // não muda entre saves. Sem `?v=`, browser e NetworkImage do Flutter no mobile
+        // devolvem o banner antigo em cache. Timestamp força refetch em todos os clients.
+        const bustedUrl = `${urlData.publicUrl}?v=${Date.now()}`;
         const { error: urlUpdateError } = await supabase
           .from("competitions")
-          .update({ cover_image_url: urlData.publicUrl })
+          .update({ cover_image_url: bustedUrl })
           .eq("id", id);
         if (urlUpdateError) throw urlUpdateError;
       }

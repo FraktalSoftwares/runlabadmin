@@ -20,6 +20,7 @@ export type CompetitionLot = {
   isSubscriptionAllowed: boolean;
   isActive: boolean;
   sortOrder: number;
+  hasKit: boolean;
 };
 
 export type CompetitionDocument = {
@@ -76,6 +77,8 @@ export type RegistrationRow = {
   attempts: number;
   priceCents: number | null;
   lotName: string | null;
+  lotHasKit: boolean;
+  shirtSize: string | null;
   status: string;
   createdAt: string;
 };
@@ -306,6 +309,7 @@ export function useCompetitionDetails(id: string | undefined) {
           isSubscriptionAllowed: l.is_subscription_allowed,
           isActive: l.is_active,
           sortOrder: l.sort_order,
+          hasKit: l.has_kit ?? false,
         })),
         documents: (documents || []).map((d) => ({
           id: d.id,
@@ -453,7 +457,7 @@ export function useCompetitionRegistrations(
 
       let query = supabase
         .from("competition_registrations")
-        .select("id, user_id, distance_id, lot_id, status, created_at", {
+        .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size", {
           count: "exact",
         })
         .eq("competition_id", competitionId)
@@ -519,14 +523,14 @@ export function useCompetitionRegistrations(
       const lotIds = [
         ...new Set(regs.filter((r) => r.lot_id).map((r) => r.lot_id)),
       ];
-      const lotMap: Record<string, { name: string; price_cents: number }> = {};
+      const lotMap: Record<string, { name: string; price_cents: number; has_kit: boolean }> = {};
       if (lotIds.length > 0) {
         const { data: lotsData } = await supabase
           .from("competition_lots")
-          .select("id, name, price_cents")
+          .select("id, name, price_cents, has_kit")
           .in("id", lotIds);
         (lotsData || []).forEach((l) => {
-          lotMap[l.id] = l;
+          lotMap[l.id] = { ...l, has_kit: l.has_kit ?? false };
         });
       }
 
@@ -555,6 +559,8 @@ export function useCompetitionRegistrations(
           attempts: attemptsByUser[r.user_id] || 0,
           priceCents: lot?.price_cents ?? null,
           lotName: lot?.name || null,
+          lotHasKit: lot?.has_kit ?? false,
+          shirtSize: r.shirt_size ?? null,
           status: r.status,
           createdAt: r.created_at,
         };
@@ -690,7 +696,7 @@ export async function exportRegistrationsCsv(competitionId: string) {
   // Fetch ALL registrations (no pagination)
   const { data: regs, error: regsError } = await supabase
     .from("competition_registrations")
-    .select("id, user_id, distance_id, lot_id, status, created_at")
+    .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size")
     .eq("competition_id", competitionId)
     .neq("status", "cancelled")
     .order("created_at", { ascending: false });
@@ -728,14 +734,14 @@ export async function exportRegistrationsCsv(competitionId: string) {
   const lotIds = [
     ...new Set(regs.filter((r) => r.lot_id).map((r) => r.lot_id)),
   ];
-  const lotMap: Record<string, { name: string; price_cents: number }> = {};
+  const lotMap: Record<string, { name: string; price_cents: number; has_kit: boolean }> = {};
   if (lotIds.length > 0) {
     const { data: lotsData } = await supabase
       .from("competition_lots")
-      .select("id, name, price_cents")
+      .select("id, name, price_cents, has_kit")
       .in("id", lotIds);
     (lotsData || []).forEach((l) => {
-      lotMap[l.id] = l;
+      lotMap[l.id] = { ...l, has_kit: l.has_kit ?? false };
     });
   }
 
@@ -750,7 +756,7 @@ export async function exportRegistrationsCsv(competitionId: string) {
     attemptsByUser[r.user_id] = (attemptsByUser[r.user_id] || 0) + 1;
   });
 
-  const headers = ["Nome", "Distância", "Tentativas", "Lote", "Valor", "Status", "Data de inscrição"];
+  const headers = ["Nome", "Distância", "Tentativas", "Lote", "Valor", "Tamanho camiseta", "Status", "Data de inscrição"];
   const rows = regs.map((r) => {
     const lot = r.lot_id ? lotMap[r.lot_id] : null;
     return [
@@ -759,6 +765,7 @@ export async function exportRegistrationsCsv(competitionId: string) {
       String(attemptsByUser[r.user_id] || 0),
       lot?.name || "-",
       lot ? formatPrice(lot.price_cents) : "-",
+      lot?.has_kit ? (r.shirt_size ?? "-") : "-",
       mapRegistrationStatus(r.status),
       new Date(r.created_at).toLocaleDateString("pt-BR"),
     ];

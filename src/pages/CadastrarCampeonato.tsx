@@ -326,6 +326,7 @@ const CadastrarCampeonato = () => {
           is_subscription_allowed: l.permitirCreditos,
           is_active: true,
           sort_order: i,
+          has_kit: l.possuiKit === "sim",
         }));
       if (lotRows.length > 0) {
         const { error: lotError } = await supabase.from("competition_lots").insert(lotRows);

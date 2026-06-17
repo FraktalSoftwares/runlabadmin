@@ -78,16 +78,17 @@ const formSchema = z.object({
   premiacoes: z.enum(["sim", "nao"]).optional(),
   quantidadeRecompensas: z.string().optional(),
   outraQuantidade: z.string().optional(),
-  possuiKit: z.enum(["sim", "nao"]).optional(),
   tipoCompeticao: z.string().optional(),
   lote1Nome: z.string().optional(),
   lote1Preco: z.string().optional(),
   lote1Descricao: z.string().optional(),
   lote1CreditosAssinatura: z.boolean().optional(),
+  lote1PossuiKit: z.boolean().optional(),
   lote2Nome: z.string().optional(),
   lote2Preco: z.string().optional(),
   lote2Descricao: z.string().optional(),
-  lote2CreditosAssinatura: z.boolean().optional()
+  lote2CreditosAssinatura: z.boolean().optional(),
+  lote2PossuiKit: z.boolean().optional()
 });
 type FormData = z.infer<typeof formSchema>;
 
@@ -108,16 +109,17 @@ const defaultFormValues: FormData = {
   premiacoes: "sim",
   quantidadeRecompensas: "",
   outraQuantidade: "",
-  possuiKit: "sim",
   tipoCompeticao: "paga",
   lote1Nome: "",
   lote1Preco: "",
   lote1Descricao: "",
   lote1CreditosAssinatura: false,
+  lote1PossuiKit: false,
   lote2Nome: "",
   lote2Preco: "",
   lote2Descricao: "",
-  lote2CreditosAssinatura: false
+  lote2CreditosAssinatura: false,
+  lote2PossuiKit: false
 };
 
 const EditarCompeticao = () => {
@@ -189,16 +191,17 @@ const EditarCompeticao = () => {
       premiacoes: competition.prizeDescription ? "sim" : "nao",
       quantidadeRecompensas: "",
       outraQuantidade: "",
-      possuiKit: "sim",
       tipoCompeticao: competition.isFree ? "gratuita" : "paga",
       lote1Nome: lot0?.name ?? "",
       lote1Preco: lot0 != null ? formatPriceCentsToInput(lot0.priceCents) : "",
       lote1Descricao: lot0?.description ?? "",
       lote1CreditosAssinatura: lot0?.isSubscriptionAllowed ?? false,
+      lote1PossuiKit: lot0?.hasKit ?? false,
       lote2Nome: lot1?.name ?? "",
       lote2Preco: lot1 != null ? formatPriceCentsToInput(lot1.priceCents) : "",
       lote2Descricao: lot1?.description ?? "",
-      lote2CreditosAssinatura: lot1?.isSubscriptionAllowed ?? false
+      lote2CreditosAssinatura: lot1?.isSubscriptionAllowed ?? false,
+      lote2PossuiKit: lot1?.hasKit ?? false
     });
     if (competition.coverImageUrl) setPreviewUrl(competition.coverImageUrl);
     setSelectedSponsorIds(competition.sponsors?.map((s) => s.id) ?? []);
@@ -439,12 +442,14 @@ const EditarCompeticao = () => {
               preco: data.lote1Preco ?? "",
               descricao: data.lote1Descricao?.trim() ?? "",
               creditos: data.lote1CreditosAssinatura ?? false,
+              kit: data.lote1PossuiKit ?? false,
             },
             {
               nome: data.lote2Nome?.trim() ?? "",
               preco: data.lote2Preco ?? "",
               descricao: data.lote2Descricao?.trim() ?? "",
               creditos: data.lote2CreditosAssinatura ?? false,
+              kit: data.lote2PossuiKit ?? false,
             },
           ];
 
@@ -459,6 +464,7 @@ const EditarCompeticao = () => {
               description: formLot.descricao || null,
               price_cents: parseValorToCents(formLot.preco),
               is_subscription_allowed: formLot.creditos,
+              has_kit: formLot.kit,
             };
 
             if (existing) {
@@ -1086,31 +1092,6 @@ const EditarCompeticao = () => {
             <div className="rounded-[20px] border border-border/50 bg-[#2A2A2A] p-8">
               <h2 className="text-lg font-semibold mb-6">Inscrição e checkout</h2>
 
-              {/* Possui kit incluído? */}
-              <div className="mb-6">
-                <Label className="text-sm text-muted-foreground mb-3 block">
-                  Possui kit incluído?
-                </Label>
-                <RadioGroup
-                  value={form.watch("possuiKit")}
-                  onValueChange={(value) => form.setValue("possuiKit", value as "sim" | "nao", { shouldDirty: true })}
-                  className="flex gap-6"
-                >
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="sim" id="kit-sim" />
-                    <Label htmlFor="kit-sim" className="text-sm cursor-pointer">
-                      Sim
-                    </Label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <RadioGroupItem value="nao" id="kit-nao" />
-                    <Label htmlFor="kit-nao" className="text-sm cursor-pointer">
-                      Não
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
               {/* Tipo de competição */}
               <div className="mb-6">
                 <Label htmlFor="tipoCompeticao" className="text-sm text-muted-foreground mb-2 block">
@@ -1168,6 +1149,21 @@ const EditarCompeticao = () => {
                         Permitir compra com créditos de assinatura
                       </Label>
                     </div>
+                    <div className="flex items-center gap-3 mt-2">
+                      <Checkbox
+                        id="lote1Kit"
+                        checked={form.watch("lote1PossuiKit") || false}
+                        onCheckedChange={(checked) =>
+                          form.setValue("lote1PossuiKit", checked as boolean, { shouldDirty: true })
+                        }
+                      />
+                      <Label
+                        htmlFor="lote1Kit"
+                        className="text-sm text-muted-foreground cursor-pointer"
+                      >
+                        Inclui kit (pedir tamanho da camiseta no checkout)
+                      </Label>
+                    </div>
                   </div>
 
                   {/* Lote 2 */}
@@ -1204,6 +1200,21 @@ const EditarCompeticao = () => {
                         className="text-sm text-muted-foreground cursor-pointer"
                       >
                         Permitir compra com créditos de assinatura
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-3 mt-2">
+                      <Checkbox
+                        id="lote2Kit"
+                        checked={form.watch("lote2PossuiKit") || false}
+                        onCheckedChange={(checked) =>
+                          form.setValue("lote2PossuiKit", checked as boolean, { shouldDirty: true })
+                        }
+                      />
+                      <Label
+                        htmlFor="lote2Kit"
+                        className="text-sm text-muted-foreground cursor-pointer"
+                      >
+                        Inclui kit (pedir tamanho da camiseta no checkout)
                       </Label>
                     </div>
                   </div>

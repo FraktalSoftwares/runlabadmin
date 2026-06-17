@@ -383,6 +383,9 @@ const InscricoesTab = ({
                 Valor
               </TableHead>
               <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>
+                Tamanho
+              </TableHead>
+              <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>
                 Status
               </TableHead>
             </TableRow>
@@ -420,6 +423,9 @@ const InscricoesTab = ({
                 <TableCell className="text-foreground">{reg.lotName || "-"}</TableCell>
                 <TableCell className="text-foreground">
                   {formatPrice(reg.priceCents)}
+                </TableCell>
+                <TableCell className="text-foreground">
+                  {reg.lotHasKit ? (reg.shirtSize ?? "-") : "-"}
                 </TableCell>
                 <TableCell>{getRegistrationStatusBadge(reg.status)}</TableCell>
               </TableRow>

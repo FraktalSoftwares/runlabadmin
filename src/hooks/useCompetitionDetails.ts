@@ -250,7 +250,7 @@ export function useCompetitionDetails(id: string | undefined) {
 
       // 6. Fetch registration stats
       const { data: registrations } = await supabase
-        .from("competition_registrations")
+        .from("v_admin_competition_registered_users")
         .select("id, user_id, lot_id, status")
         .eq("competition_id", id)
         .neq("status", "cancelled");
@@ -400,7 +400,7 @@ export function useCompetitionRegistrations(
 
       if (filters.participacaoMin != null && filters.participacaoMin > 0) {
         const { data: regs } = await supabase
-          .from("competition_registrations")
+          .from("v_admin_competition_registered_users")
           .select("user_id")
           .neq("status", "cancelled");
         const countByUser: Record<string, number> = {};
@@ -456,8 +456,8 @@ export function useCompetitionRegistrations(
       }
 
       let query = supabase
-        .from("competition_registrations")
-        .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size", {
+        .from("v_admin_competition_registered_users")
+        .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size, attempts", {
           count: "exact",
         })
         .eq("competition_id", competitionId)
@@ -534,18 +534,6 @@ export function useCompetitionRegistrations(
         });
       }
 
-      // Fetch attempt counts (user_runs per user for this competition)
-      const { data: runs } = await supabase
-        .from("user_runs")
-        .select("user_id")
-        .eq("competition_id", competitionId)
-        .in("user_id", userIds);
-
-      const attemptsByUser: Record<string, number> = {};
-      (runs || []).forEach((r) => {
-        attemptsByUser[r.user_id] = (attemptsByUser[r.user_id] || 0) + 1;
-      });
-
       const rows: RegistrationRow[] = regs.map((r) => {
         const profile = profileMap[r.user_id];
         const distance = r.distance_id ? distanceMap[r.distance_id] : null;
@@ -556,7 +544,7 @@ export function useCompetitionRegistrations(
           userAvatar: profile?.avatar_url || null,
           distanceLabel: distance?.label || null,
           distanceMeters: distance?.meters || null,
-          attempts: attemptsByUser[r.user_id] || 0,
+          attempts: r.attempts || 0,
           priceCents: lot?.price_cents ?? null,
           lotName: lot?.name || null,
           lotHasKit: lot?.has_kit ?? false,
@@ -607,23 +595,20 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Espelha exatamente o ranking do app mobile: v_competition_leaderboard
-      // aplica filtros de validação (>=99% da distância + pace 210-1800 s/km)
-      // para corridas finalizadas, mas inclui corridas em curso/paused sem
-      // validação (mesmo critério do app). Aqui NÃO filtramos state pra evitar
-      // divergência — runs paused que apareciam no app sumiam do admin.
+      // Ranking administrativo: uma linha por inscrito com pelo menos uma tentativa.
+      // Não usa os filtros competitivos da leaderboard pública, porque esta aba
+      // precisa bater com a quantidade de inscritos que já tentaram correr.
       const {
         data: runs,
         error: runsError,
         count,
       } = await supabase
-        .from("v_competition_leaderboard")
+        .from("v_admin_competition_attempt_ranking")
         .select(
           "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state",
           { count: "exact" }
         )
         .eq("competition_id", competitionId)
-        .order("distance_meters", { ascending: true })
         .order("rank", { ascending: true })
         .range(from, to);
 
@@ -695,8 +680,8 @@ export function downloadCsv(content: string, filename: string) {
 export async function exportRegistrationsCsv(competitionId: string) {
   // Fetch ALL registrations (no pagination)
   const { data: regs, error: regsError } = await supabase
-    .from("competition_registrations")
-    .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size")
+    .from("v_admin_competition_registered_users")
+    .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size, attempts")
     .eq("competition_id", competitionId)
     .neq("status", "cancelled")
     .order("created_at", { ascending: false });
@@ -745,24 +730,13 @@ export async function exportRegistrationsCsv(competitionId: string) {
     });
   }
 
-  const { data: runs } = await supabase
-    .from("user_runs")
-    .select("user_id")
-    .eq("competition_id", competitionId)
-    .in("user_id", userIds);
-
-  const attemptsByUser: Record<string, number> = {};
-  (runs || []).forEach((r) => {
-    attemptsByUser[r.user_id] = (attemptsByUser[r.user_id] || 0) + 1;
-  });
-
   const headers = ["Nome", "Distância", "Tentativas", "Lote", "Valor", "Tamanho camiseta", "Status", "Data de inscrição"];
   const rows = regs.map((r) => {
     const lot = r.lot_id ? lotMap[r.lot_id] : null;
     return [
       profileMap[r.user_id] || "Desconhecido",
       r.distance_id ? distanceMap[r.distance_id] || "-" : "-",
-      String(attemptsByUser[r.user_id] || 0),
+      String(r.attempts || 0),
       lot?.name || "-",
       lot ? formatPrice(lot.price_cents) : "-",
       lot?.has_kit ? (r.shirt_size ?? "-") : "-",
@@ -775,15 +749,14 @@ export async function exportRegistrationsCsv(competitionId: string) {
   downloadCsv(csv, `inscricoes-${competitionId}.csv`);
 }
 
-/** Exports ranking (best run per runner) as CSV — mesma fonte do app mobile */
+/** Exports ranking (best run per registered runner with at least one attempt) as CSV */
 export async function exportRankingCsv(competitionId: string) {
   const { data: runs, error: runsError } = await supabase
-    .from("v_competition_leaderboard")
+    .from("v_admin_competition_attempt_ranking")
     .select(
       "user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name"
     )
     .eq("competition_id", competitionId)
-    .order("distance_meters", { ascending: true })
     .order("rank", { ascending: true });
 
   if (runsError) throw runsError;

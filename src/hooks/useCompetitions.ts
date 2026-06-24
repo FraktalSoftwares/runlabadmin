@@ -109,7 +109,7 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
   const countsByCompetition: Record<string, number> = {};
   if (ids.length > 0) {
     const { data: regs } = await supabase
-      .from("competition_registrations")
+      .from("v_admin_competition_registered_users")
       .select("competition_id")
       .neq("status", "cancelled")
       .in("competition_id", ids);

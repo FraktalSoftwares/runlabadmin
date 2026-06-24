@@ -265,7 +265,7 @@ const CadastrarCampeonato = () => {
         const path = `competitions/${competitionId}/cover.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("sistema")
-          .upload(path, bannerFile, { upsert: true, contentType: contentType(bannerFile) });
+          .upload(path, bannerFile, { contentType: contentType(bannerFile) });
         if (uploadError) {
           toast.error("Erro ao enviar banner da competição", { description: uploadError.message });
           throw new Error(`Banner: ${uploadError.message}`);
@@ -279,7 +279,7 @@ const CadastrarCampeonato = () => {
         const path = `competitions/${competitionId}/thumbnail.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from("sistema")
-          .upload(path, miniBannerFile, { upsert: true, contentType: contentType(miniBannerFile) });
+          .upload(path, miniBannerFile, { contentType: contentType(miniBannerFile) });
         if (uploadError) {
           toast.error("Erro ao enviar mini banner", { description: uploadError.message });
           throw new Error(`Mini banner: ${uploadError.message}`);
@@ -344,7 +344,6 @@ const CadastrarCampeonato = () => {
         const { error: uploadDocError } = await supabase.storage
           .from("sistema")
           .upload(path, file, {
-            upsert: true,
             contentType: file.type || "application/octet-stream",
           });
         if (uploadDocError) throw uploadDocError;

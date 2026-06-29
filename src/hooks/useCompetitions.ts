@@ -28,8 +28,9 @@ const mapStatus = (status: DbStatus | null): CompetitionStatus => {
     case "in_progress":
       return "em_andamento";
     case "finished":
-    case "closed":
       return "finalizada";
+    case "closed":
+      return "fechada";
     case "draft":
       return "rascunho";
     default:
@@ -61,6 +62,7 @@ function statusToDb(status: string | undefined): string | null {
   switch (status) {
     case "aberta": return "open";
     case "em_andamento": return "in_progress";
+    case "fechada": return "closed";
     case "finalizada": return "finished";
     case "rascunho": return "draft";
     default: return null;

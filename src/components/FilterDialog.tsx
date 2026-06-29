@@ -48,7 +48,6 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
     setFormato("");
     setCampeonato("");
     setModalidade("");
-    setCustomModalidade("");
     clearFilters();
     toast.info("Filtros limpos", { description: "Todos os filtros foram removidos." });
     onOpenChange(false);
@@ -87,6 +86,17 @@ export const FilterDialog = ({ open, onOpenChange }: FilterDialogProps) => {
                 }`}
               >
                 Em andamento
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setStatus("fechada")}
+                className={`${
+                  status === "fechada"
+                    ? "bg-[#D4FF00] text-black hover:bg-[#D4FF00]/90"
+                    : "bg-[#2A2A2A] text-foreground hover:bg-[#333333]"
+                }`}
+              >
+                Fechada
               </Button>
               <Button
                 variant="ghost"

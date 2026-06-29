@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useRealtimeInvalidation } from "./useSupabaseRealtime";
 
-export type FinanceiroCompetitionStatus = "aberta" | "em_andamento" | "finalizada" | "rascunho";
+export type FinanceiroCompetitionStatus = "aberta" | "em_andamento" | "fechada" | "finalizada" | "rascunho";
 
 export interface FinanceiroCompetitionRow {
   id: string;
@@ -25,8 +25,9 @@ function mapStatus(status: DbStatus | null): FinanceiroCompetitionStatus {
     case "in_progress":
       return "em_andamento";
     case "finished":
-    case "closed":
       return "finalizada";
+    case "closed":
+      return "fechada";
     default:
       return "rascunho";
   }

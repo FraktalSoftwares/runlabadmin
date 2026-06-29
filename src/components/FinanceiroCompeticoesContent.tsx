@@ -33,6 +33,7 @@ const PAGE_SIZE = 10;
 const STATUS_OPTIONS: { value: FinanceiroCompetitionStatus; label: string }[] = [
   { value: "aberta", label: "Aberta" },
   { value: "em_andamento", label: "Em andamento" },
+  { value: "fechada", label: "Fechada" },
   { value: "finalizada", label: "Finalizada" },
   { value: "rascunho", label: "Rascunho" },
 ];
@@ -43,6 +44,12 @@ function StatusBadge({ status }: { status: FinanceiroCompetitionStatus }) {
       return (
         <Badge className="bg-[#C5CCD3] text-[#2C333A] hover:bg-[#C5CCD3]/90 border-0 min-w-[100px] justify-center">
           Finalizada
+        </Badge>
+      );
+    case "fechada":
+      return (
+        <Badge className="bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 border-0 min-w-[100px] justify-center">
+          Fechada
         </Badge>
       );
     case "em_andamento":

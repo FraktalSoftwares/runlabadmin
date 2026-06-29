@@ -22,7 +22,7 @@ export function useRealtimeInvalidation(
 
     tables.forEach((table) => {
       channel.on(
-        "postgres_changes" as any,
+        "postgres_changes",
         { event: "*", schema: "public", table },
         () => {
           queryKeys.forEach((key) => {
@@ -61,7 +61,7 @@ export function useRealtimeRefetch(
 
     tables.forEach((table) => {
       channel.on(
-        "postgres_changes" as any,
+        "postgres_changes",
         { event: "*", schema: "public", table },
         () => {
           refetchRef.current();

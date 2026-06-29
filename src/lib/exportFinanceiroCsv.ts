@@ -41,6 +41,7 @@ const COMP_HEADERS = [
 const STATUS_LABELS: Record<string, string> = {
   aberta: "Aberta",
   em_andamento: "Em andamento",
+  fechada: "Fechada",
   finalizada: "Finalizada",
   rascunho: "Rascunho",
 };

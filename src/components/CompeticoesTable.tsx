@@ -40,10 +40,15 @@ import { supabase } from "@/lib/supabase";
 const getStatusBadge = (status: string) => {
   switch (status) {
     case "finalizada":
-    case "fechada":
       return (
         <Badge variant="outline" className="bg-muted/10 text-muted-foreground border-muted">
           Finalizada
+        </Badge>
+      );
+    case "fechada":
+      return (
+        <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+          Fechada
         </Badge>
       );
     case "em_andamento":
@@ -74,8 +79,8 @@ const statusToDb = (uiStatus: string): string => {
   switch (uiStatus) {
     case "aberta": return "open";
     case "em_andamento": return "in_progress";
-    case "finalizada":
-    case "fechada": return "finished";
+    case "fechada": return "closed";
+    case "finalizada": return "finished";
     case "rascunho": return "draft";
     default: return "draft";
   }
@@ -252,7 +257,7 @@ export const CompeticoesTable = () => {
             ) : (
               paginatedRows.map((row) => {
                 const toggle = getToggleTarget(row.status);
-                const isFinished = row.status === "finalizada" || row.status === "fechada";
+                const isFinished = row.status === "finalizada";
 
                 return (
                   <TableRow

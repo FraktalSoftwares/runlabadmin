@@ -16,12 +16,15 @@ import {
   useCompetitionRegistrations,
   useCompetitionRanking,
   formatPace,
+  formatTime,
   formatDistanceKm,
   formatPrice,
   formatDateBR,
   formatDateRangeBR,
   mapRegistrationStatus,
   mapCompetitionStatus,
+  mapRunState,
+  mapHiddenReason,
   exportRegistrationsCsv,
   exportRankingCsv,
 } from "@/hooks/useCompetitionDetails";
@@ -448,78 +451,122 @@ const InscricoesTab = ({
 
 const RankingTab = ({ competitionId }: { competitionId: string }) => {
   const [page, setPage] = useState(1);
+  const [source, setSource] = useState<"public" | "audit">("public");
   const pageSize = 10;
   const { data, total, loading, error, refetch } = useCompetitionRanking(
     competitionId,
     page,
-    pageSize
+    pageSize,
+    source
   );
 
   if (loading && data.length === 0) return <LoadingState />;
   if (error) return <ErrorState message={error.message} onRetry={refetch} />;
-  if (data.length === 0) return <EmptyState message="Nenhum resultado no ranking ainda." />;
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap gap-3">
+        <Button
+          type="button"
+          variant={source === "public" ? "default" : "secondary"}
+          onClick={() => {
+            setSource("public");
+            setPage(1);
+          }}
+        >
+          Ranking público (app)
+        </Button>
+        <Button
+          type="button"
+          variant={source === "audit" ? "default" : "secondary"}
+          onClick={() => {
+            setSource("audit");
+            setPage(1);
+          }}
+        >
+          Auditoria de tentativas
+        </Button>
+      </div>
+
       <div className="rounded-lg overflow-hidden border border-border mb-6">
         <div className="px-6 py-4 bg-[#262626] flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-foreground">Ranking atual</h2>
+          <div>
+            <h2 className="text-xl font-semibold text-foreground">
+              {source === "public" ? "Ranking público (app)" : "Auditoria de tentativas"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {source === "public"
+                ? "Mesma fonte exibida no app, com paces abaixo de 3:00/km ocultos."
+                : "Inclui todos que tentaram correr e mostra por que podem não aparecer no app."}
+            </p>
+          </div>
           <p className="text-sm text-muted-foreground">{total} resultado{total !== 1 ? "s" : ""}</p>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-table-header hover:bg-table-header">
-              <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>
-                Posição
-              </TableHead>
-              <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>
-                Corredor
-              </TableHead>
-              <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>
-                Pace
-              </TableHead>
-              <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>
-                Distância
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((item) => (
-              <TableRow
-                key={`${item.userId}-${item.position}`}
-                className="border-border hover:bg-muted/50 bg-[#262626]"
-              >
-                <TableCell className="text-foreground font-medium">
-                  {item.position}º
-                </TableCell>
-                <TableCell className="font-medium text-foreground">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
-                      {item.userAvatar ? (
-                        <img
-                          src={item.userAvatar}
-                          alt={item.userName}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
-                          {item.userName.charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    {item.userName}
-                  </div>
-                </TableCell>
-                <TableCell className="text-foreground">
-                  {formatPace(item.paceSecondsPerKm)}
-                </TableCell>
-                <TableCell className="text-foreground">
-                  {formatDistanceKm(item.distanceMeters)}
-                </TableCell>
+        {data.length === 0 ? (
+          <EmptyState message="Nenhum resultado no ranking ainda." />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-table-header hover:bg-table-header">
+                <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>Posição</TableHead>
+                <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>Corredor</TableHead>
+                <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>Pace</TableHead>
+                <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>Tempo</TableHead>
+                <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>Distância</TableHead>
+                {source === "audit" && (
+                  <>
+                    <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>Status</TableHead>
+                    <TableHead className="font-medium" style={{ color: "#E0E0E0" }}>App</TableHead>
+                  </>
+                )}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {data.map((item) => (
+                <TableRow
+                  key={`${source}-${item.userId}-${item.distanceMeters}-${item.position}`}
+                  className="border-border hover:bg-muted/50 bg-[#262626]"
+                >
+                  <TableCell className="text-foreground font-medium">{item.position}º</TableCell>
+                  <TableCell className="font-medium text-foreground">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-muted overflow-hidden flex-shrink-0">
+                        {item.userAvatar ? (
+                          <img src={item.userAvatar} alt={item.userName} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
+                            {item.userName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      {item.userName}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-foreground">{formatPace(item.paceSecondsPerKm)}</TableCell>
+                  <TableCell className="text-foreground">{formatTime(item.totalTimeSeconds)}</TableCell>
+                  <TableCell className="text-foreground">{formatDistanceKm(item.distanceMeters)}</TableCell>
+                  {source === "audit" && (
+                    <>
+                      <TableCell className="text-foreground">{mapRunState(item.state)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.publicVisibility === "visible"
+                              ? "bg-green-500/10 text-green-400 border-green-500/20"
+                              : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                          }
+                        >
+                          {mapHiddenReason(item.hiddenReason)}
+                        </Badge>
+                      </TableCell>
+                    </>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </div>
 
       <Pagination

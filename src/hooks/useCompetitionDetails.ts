@@ -91,7 +91,14 @@ export type RankingRow = {
   paceSecondsPerKm: number | null;
   distanceMeters: number;
   totalTimeSeconds: number;
+  state: string;
+  currentDistanceMeters: number | null;
+  publicVisibility: "visible" | "hidden";
+  hiddenReason: string | null;
+  rawTotalTimeSeconds: number | null;
 };
+
+export type RankingSource = "public" | "audit";
 
 /** Filtros da aba Inscrições (competição) */
 export type InscricoesFilters = {
@@ -121,7 +128,7 @@ export const formatTime = (seconds: number | null): string => {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   const pad = (n: number) => n.toString().padStart(2, "0");
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
 };
 
 export const formatDistanceKm = (meters: number): string => {
@@ -163,6 +170,44 @@ export const mapCompetitionStatus = (status: string): string => {
       return "Finalizada";
     default:
       return status;
+  }
+};
+
+export const mapRunState = (state: string): string => {
+  switch (state) {
+    case "finished":
+      return "Finalizada";
+    case "running":
+      return "Em andamento";
+    case "paused":
+      return "Pausada";
+    case "aborted":
+      return "Abortada";
+    default:
+      return state;
+  }
+};
+
+export const mapHiddenReason = (reason: string | null): string => {
+  switch (reason) {
+    case null:
+      return "Visível no app";
+    case "aborted":
+      return "Corrida abortada";
+    case "missing_pace":
+      return "Sem pace";
+    case "pace_too_fast":
+      return "Pace abaixo de 3:00/km";
+    case "pace_too_slow":
+      return "Pace acima de 30:00/km";
+    case "below_99pct_distance":
+      return "Distância abaixo de 99%";
+    case "paused_after_competition_end":
+      return "Pausada após encerramento";
+    case "not_finished":
+      return "Não finalizada";
+    default:
+      return reason;
   }
 };
 
@@ -579,7 +624,8 @@ export function useCompetitionRegistrations(
 export function useCompetitionRanking(
   competitionId: string | undefined,
   page: number = 1,
-  pageSize: number = 10
+  pageSize: number = 10,
+  source: RankingSource = "public"
 ) {
   const [data, setData] = useState<RankingRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -595,20 +641,23 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // Ranking administrativo: uma linha por inscrito com pelo menos uma tentativa.
-      // Não usa os filtros competitivos da leaderboard pública, porque esta aba
-      // precisa bater com a quantidade de inscritos que já tentaram correr.
+      const table =
+        source === "public"
+          ? "v_competition_leaderboard"
+          : "v_admin_competition_attempt_ranking";
+      const selectColumns =
+        source === "public"
+          ? "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state, current_distance_meters"
+          : "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state, current_distance_meters, public_visibility, hidden_reason, raw_total_time_seconds";
       const {
         data: runs,
         error: runsError,
         count,
       } = await supabase
-        .from("v_admin_competition_attempt_ranking")
-        .select(
-          "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state",
-          { count: "exact" }
-        )
+        .from(table)
+        .select(selectColumns, { count: "exact" })
         .eq("competition_id", competitionId)
+        .order("distance_meters", { ascending: true })
         .order("rank", { ascending: true })
         .range(from, to);
 
@@ -628,6 +677,11 @@ export function useCompetitionRanking(
         paceSecondsPerKm: r.avg_pace_seconds_per_km,
         distanceMeters: r.distance_meters,
         totalTimeSeconds: r.total_time_seconds,
+        state: r.state,
+        currentDistanceMeters: r.current_distance_meters ?? null,
+        publicVisibility: r.public_visibility ?? "visible",
+        hiddenReason: r.hidden_reason ?? null,
+        rawTotalTimeSeconds: r.raw_total_time_seconds ?? null,
       }));
 
       setData(rows);
@@ -639,7 +693,7 @@ export function useCompetitionRanking(
     } finally {
       setLoading(false);
     }
-  }, [competitionId, page, pageSize]);
+  }, [competitionId, page, pageSize, source]);
 
   useEffect(() => {
     fetchRanking();
@@ -752,11 +806,12 @@ export async function exportRegistrationsCsv(competitionId: string) {
 /** Exports ranking (best run per registered runner with at least one attempt) as CSV */
 export async function exportRankingCsv(competitionId: string) {
   const { data: runs, error: runsError } = await supabase
-    .from("v_admin_competition_attempt_ranking")
+    .from("v_competition_leaderboard")
     .select(
       "user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name"
     )
     .eq("competition_id", competitionId)
+    .order("distance_meters", { ascending: true })
     .order("rank", { ascending: true });
 
   if (runsError) throw runsError;

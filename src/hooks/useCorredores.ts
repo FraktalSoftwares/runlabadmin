@@ -59,8 +59,8 @@ async function fetchCorredores(
 ): Promise<{ data: CorredorRow[]; total: number }> {
   const needCityState = Boolean(filters.cidade?.trim() || filters.estado?.trim());
   const selectFields = needCityState
-    ? "id, full_name, email, preferred_distance, tipo_user, updated_at, credit_balance, city, state"
-    : "id, full_name, email, preferred_distance, tipo_user, updated_at, credit_balance";
+    ? "id, full_name, email, phone, preferred_distance, tipo_user, updated_at, credit_balance, city, state"
+    : "id, full_name, email, phone, preferred_distance, tipo_user, updated_at, credit_balance";
 
   // Filtro de participação: 0 = só quem tem zero inscrições; >0 = mínimo de inscrições
   let userIdsParticipacao: string[] | null = null;
@@ -136,6 +136,7 @@ async function fetchCorredores(
     id: string;
     full_name: string | null;
     email: string | null;
+    phone: string | null;
     preferred_distance: string | null;
     tipo_user: string | null;
     updated_at: string | null;
@@ -147,7 +148,7 @@ async function fetchCorredores(
       id: r.id,
       nome: r.full_name ?? "—",
       email: r.email ?? "—",
-      telefone: "—",
+      telefone: r.phone?.trim() || "—",
       preferencia: preferredDistanceToLabel(r.preferred_distance),
       vinculo: r.tipo_user === "Parceiro" ? "Corredor/parceiro" : "Corredor",
       ultimoAcesso: formatLastAccess(r.updated_at),

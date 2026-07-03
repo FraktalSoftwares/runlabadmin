@@ -121,7 +121,7 @@ export function useCorredorDetails(id: string | undefined) {
     try {
       const { data: row, error: viewError } = await supabase
         .from("v_corredores_admin")
-        .select("id, full_name, email, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance, city, state, total_xp, is_partner")
+        .select("id, full_name, email, phone, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance, city, state, total_xp, is_partner")
         .eq("id", id)
         .single();
 
@@ -191,7 +191,7 @@ export function useCorredorDetails(id: string | undefined) {
         id: row.id,
         name: (row.full_name as string) ?? "—",
         email: (row.email as string) ?? "—",
-        phone: "—",
+        phone: ((row.phone as string | null)?.trim()) || "—",
         birthDate: formatDate(row.birth_date as string | null),
         city: ((row.city as string | null)?.trim()) || "—",
         state: ((row.state as string | null)?.trim()) || "—",

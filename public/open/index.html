@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Abrindo RunLab...</title>
+</head>
+<body>
+  <p>Abrindo o RunLab...</p>
+
+  <script>
+    const androidStoreUrl = 'https://play.google.com/store/apps/details?id=com.fraktal.runlab';
+    const iosStoreUrl = 'https://apps.apple.com/br/app/runlab/id6475360973';
+    const fallbackUrl = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      ? iosStoreUrl
+      : androidStoreUrl;
+
+    window.location.href = 'runlab://open';
+
+    setTimeout(() => {
+      window.location.href = fallbackUrl;
+    }, 1500);
+  </script>
+</body>
+</html>

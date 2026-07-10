@@ -19,6 +19,7 @@ import PasswordRecovery from "./pages/PasswordRecovery";
 import DefinarSenha from "./pages/DefinarSenha";
 import MinhaConta from "./pages/MinhaConta";
 import NotFound from "./pages/NotFound";
+import Open from "./pages/Open";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/open" element={<Open />} />
           <Route path="/recuperacao-senha" element={<PasswordRecovery />} />
           <Route path="/definir-senha" element={<DefinarSenha />} />
           {/* Rotas do admin */}

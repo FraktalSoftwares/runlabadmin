@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.fraktal.runlab",
+      "sha256_cert_fingerprints": [
+        "87:63:33:E7:18:87:A3:09:42:1F:E5:36:6C:6A:27:33:11:37:0D:8C:A3:FB:A4:3B:78:8F:EE:C8:FD:95:4C:02"
+      ]
+    }
+  }
+]

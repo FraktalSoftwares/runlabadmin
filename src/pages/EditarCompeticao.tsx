@@ -61,9 +61,34 @@ function extractStoragePath(publicUrl: string): string | null {
 const normalizeDistanceLabel = (label: string): string =>
   label.toLowerCase().replace(/\s+/g, "");
 
+const PRIZE_RANGES = ["1-5", "6-10", "11-20"];
+
+function parsePrizeDescription(value: string | null): Pick<FormData, "premiacoes" | "quantidadeRecompensas" | "outraQuantidade"> {
+  if (!value?.trim()) {
+    return { premiacoes: "nao", quantidadeRecompensas: "", outraQuantidade: "" };
+  }
+
+  const quantity = value.replace(/\s+premiados?$/i, "").trim();
+  if (PRIZE_RANGES.includes(quantity)) {
+    return { premiacoes: "sim", quantidadeRecompensas: quantity, outraQuantidade: "" };
+  }
+
+  return { premiacoes: "sim", quantidadeRecompensas: "outro", outraQuantidade: quantity };
+}
+
+function formatPrizeDescription(data: FormData): string | null {
+  if (data.premiacoes !== "sim") return null;
+
+  const quantity = data.quantidadeRecompensas === "outro"
+    ? data.outraQuantidade?.trim()
+    : data.quantidadeRecompensas?.trim();
+
+  return quantity ? `${quantity} premiados` : null;
+}
+
 const formSchema = z.object({
   nome: z.string().trim().min(1, "Nome da competição é obrigatório").max(100, "Nome muito longo"),
-  descricao: z.string().trim().max(500, "Descrição muito longa"),
+  descricao: z.string().trim(),
   modalidade: z.enum(["indoor", "outdoor"], { required_error: "Selecione uma modalidade" }),
   formato: z.enum(["oficial", "patrocinada", "personalizado"], { required_error: "Selecione um formato" }),
   formatoObservacoes: z.string().optional(),
@@ -151,6 +176,7 @@ const EditarCompeticao = () => {
     if (!competition) return;
     const lot0 = competition.lots[0];
     const lot1 = competition.lots[1];
+    const prizeFields = parsePrizeDescription(competition.prizeDescription);
 
     // Popula seleção de distâncias a partir das linhas em competition_distances.
     // Padrões (3km/5km/...) viram o próprio value; qualquer outra label vira "outro"
@@ -188,9 +214,7 @@ const EditarCompeticao = () => {
       tentativasIlimitadas: competition.unlimitedAttempts ?? true,
       numeroMaximoInscritos: competition.maxRegistrations != null,
       maxInscritos: competition.maxRegistrations != null ? String(competition.maxRegistrations) : "",
-      premiacoes: competition.prizeDescription ? "sim" : "nao",
-      quantidadeRecompensas: "",
-      outraQuantidade: "",
+      ...prizeFields,
       tipoCompeticao: competition.isFree ? "gratuita" : "paga",
       lote1Nome: lot0?.name ?? "",
       lote1Preco: lot0 != null ? formatPriceCentsToInput(lot0.priceCents) : "",
@@ -325,7 +349,7 @@ const EditarCompeticao = () => {
           championship_id: championshipId,
           unlimited_attempts: data.tentativasIlimitadas ?? true,
           max_registrations: maxRegistrations,
-          prize_description: data.premiacoes === "sim" ? (data.quantidadeRecompensas || data.outraQuantidade || null) : null,
+          prize_description: formatPrizeDescription(data),
         })
         .eq("id", id)
         .select();
@@ -1008,17 +1032,17 @@ const EditarCompeticao = () => {
                       variant="outline"
                       className={cn(
                         "px-6 py-2 bg-[#1A1A1A] border-border/30",
-                        form.watch("quantidadeRecompensas") === "5-5" &&
+                        form.watch("quantidadeRecompensas") === "1-5" &&
                           "border-0"
                       )}
                       style={
-                        form.watch("quantidadeRecompensas") === "5-5"
+                        form.watch("quantidadeRecompensas") === "1-5"
                           ? { backgroundColor: "#CCF725", color: "#1A1A1A" }
                           : {}
                       }
-                      onClick={() => form.setValue("quantidadeRecompensas", "5-5", { shouldDirty: true })}
+                      onClick={() => form.setValue("quantidadeRecompensas", "1-5", { shouldDirty: true })}
                     >
-                      5-5
+                      1-5
                     </Button>
                     <Button
                       type="button"

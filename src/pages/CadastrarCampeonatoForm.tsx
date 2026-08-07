@@ -17,7 +17,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ChevronLeft, Check, CalendarIcon, AlertTriangle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -71,13 +71,21 @@ const AWARD_TYPES_OPTIONS = ["Badge", "Sorteio", "Outro"] as const;
 /* ─── Competition row for linking ─── */
 type CompetitionOption = { id: string; title: string };
 
+const parseDateOnly = (value: string | null): Date | undefined =>
+  value ? new Date(`${value}T00:00:00`) : undefined;
+
 export default function CadastrarCampeonatoForm() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditing = Boolean(id);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(isEditing);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   /* competitions for linking */
   const [competitions, setCompetitions] = useState<CompetitionOption[]>([]);
   const [selectedCompetitions, setSelectedCompetitions] = useState<string[]>([]);
+  const [initialCompetitionIds, setInitialCompetitionIds] = useState<string[]>([]);
   const [outroCompetition, setOutroCompetition] = useState("");
 
   /* award types (chip selection) */
@@ -106,22 +114,73 @@ export default function CadastrarCampeonatoForm() {
   /* Fetch available competitions */
   const fetchCompetitions = useCallback(async () => {
     try {
-      const { data } = await supabase
+      let query = supabase
         .from("competitions")
-        .select("id, title")
-        .is("championship_id", null)
-        .order("created_at", { ascending: false });
+        .select("id, title, championship_id");
+
+      query = id
+        ? query.or(`championship_id.is.null,championship_id.eq.${id}`)
+        : query.is("championship_id", null);
+
+      const { data } = await query.order("created_at", { ascending: false });
       setCompetitions(
         (data ?? []).map((c) => ({ id: c.id, title: c.title ?? "Sem nome" }))
       );
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     fetchCompetitions();
   }, [fetchCompetitions]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchChampionship = async () => {
+      setIsLoading(true);
+      setLoadError(null);
+      try {
+        const [{ data: championship, error: championshipError }, { data: linked, error: linkedError }] = await Promise.all([
+          supabase.from("championships").select("*").eq("id", id).single(),
+          supabase.from("competitions").select("id").eq("championship_id", id),
+        ]);
+
+        if (championshipError) throw championshipError;
+        if (linkedError) throw linkedError;
+
+        form.reset({
+          name: championship.name ?? "",
+          short_name: championship.short_name ?? "",
+          period_start: parseDateOnly(championship.period_start),
+          period_end: parseDateOnly(championship.period_end),
+          stages_count: championship.stages_count != null ? String(championship.stages_count) : "",
+          medalists_count: championship.medalists_count != null ? String(championship.medalists_count) : "",
+          ranking_type: championship.ranking_type ?? "",
+          has_awards: championship.has_awards ? "sim" : "nao",
+          award_winners_range: championship.award_winners_range ?? "",
+          award_custom_count: championship.award_custom_count ?? "",
+        });
+
+        const linkedIds = (linked ?? []).map((competition) => competition.id);
+        setSelectedCompetitions(linkedIds);
+        setInitialCompetitionIds(linkedIds);
+        setSelectedAwardTypes(
+          (championship.award_types ?? []).filter((type: string) =>
+            AWARD_TYPES_OPTIONS.includes(type as (typeof AWARD_TYPES_OPTIONS)[number])
+          )
+        );
+        setOutroAwardType(championship.award_custom_type ?? "");
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : "Erro ao carregar campeonato");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchChampionship();
+  }, [form, id]);
 
   /* Toggle competition chip */
   const toggleCompetition = (id: string) => {
@@ -158,46 +217,68 @@ export default function CadastrarCampeonatoForm() {
         ? Math.max(0, parseInt(data.medalists_count, 10) || 0)
         : 0;
 
-      const { data: champ, error: champError } = await supabase
-        .from("championships")
-        .insert({
-          name: data.name.trim(),
-          short_name: data.short_name?.trim() || null,
-          stages_count: stagesCount,
-          medalists_count: medalistsCount,
-          period_start: data.period_start
-            ? format(data.period_start, "yyyy-MM-dd")
+      const payload = {
+        name: data.name.trim(),
+        short_name: data.short_name?.trim() || null,
+        stages_count: stagesCount,
+        medalists_count: medalistsCount,
+        period_start: data.period_start
+          ? format(data.period_start, "yyyy-MM-dd")
+          : null,
+        period_end: data.period_end
+          ? format(data.period_end, "yyyy-MM-dd")
+          : null,
+        ranking_type: data.ranking_type || null,
+        status,
+        has_awards: data.has_awards === "sim",
+        award_winners_range: data.award_winners_range || null,
+        award_custom_count:
+          data.award_winners_range === "outro"
+            ? data.award_custom_count || null
             : null,
-          period_end: data.period_end
-            ? format(data.period_end, "yyyy-MM-dd")
+        award_types: awardTypes.length > 0 ? awardTypes : null,
+        award_custom_type:
+          selectedAwardTypes.includes("Outro") && outroAwardType.trim()
+            ? outroAwardType.trim()
             : null,
-          ranking_type: data.ranking_type || null,
-          status,
-          has_awards: data.has_awards === "sim",
-          award_winners_range: data.award_winners_range || null,
-          award_custom_count:
-            data.award_winners_range === "outro"
-              ? data.award_custom_count || null
-              : null,
-          award_types: awardTypes.length > 0 ? awardTypes : null,
-          award_custom_type:
-            selectedAwardTypes.includes("Outro") && outroAwardType.trim()
-              ? outroAwardType.trim()
-              : null,
-        })
-        .select("id")
-        .single();
+      };
 
-      if (champError) throw champError;
+      let championshipId = id;
+      if (id) {
+        const { error: championshipError } = await supabase
+          .from("championships")
+          .update(payload)
+          .eq("id", id);
+        if (championshipError) throw championshipError;
+      } else {
+        const { data: championship, error: championshipError } = await supabase
+          .from("championships")
+          .insert(payload)
+          .select("id")
+          .single();
+        if (championshipError) throw championshipError;
+        championshipId = championship.id;
+      }
 
       /* Link selected competitions (apenas IDs válidos de competições, exclui "outro") */
       const validCompetitionIds = selectedCompetitions.filter(
         (id) => id !== "outro" && competitions.some((c) => c.id === id)
       );
-      if (validCompetitionIds.length > 0 && champ) {
+      const removedCompetitionIds = initialCompetitionIds.filter(
+        (competitionId) => !validCompetitionIds.includes(competitionId)
+      );
+      if (removedCompetitionIds.length > 0) {
+        const { error: unlinkError } = await supabase
+          .from("competitions")
+          .update({ championship_id: null })
+          .in("id", removedCompetitionIds);
+        if (unlinkError) throw unlinkError;
+      }
+
+      if (validCompetitionIds.length > 0 && championshipId) {
         const { error: linkError } = await supabase
           .from("competitions")
-          .update({ championship_id: champ.id })
+          .update({ championship_id: championshipId })
           .in("id", validCompetitionIds);
         if (linkError) throw linkError;
       }
@@ -205,7 +286,9 @@ export default function CadastrarCampeonatoForm() {
       toast.success(
         status === "draft"
           ? "Rascunho salvo com sucesso!"
-          : "Campeonato publicado com sucesso!"
+          : isEditing
+            ? "Campeonato atualizado com sucesso!"
+            : "Campeonato publicado com sucesso!"
       );
       navigate("/gestao-competicoes");
     } catch (e: unknown) {
@@ -230,6 +313,29 @@ export default function CadastrarCampeonatoForm() {
 
   /* ─── Premiações disabled? ─── */
   const premiacoesDisabled = championshipHasAwards;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto max-w-[1044px] px-6 py-8 pt-24">
+          <p className="text-muted-foreground">Carregando campeonato...</p>
+        </main>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto max-w-[1044px] px-6 py-8 pt-24">
+          <p className="text-destructive mb-4">{loadError}</p>
+          <Button type="button" onClick={() => navigate("/gestao-competicoes")}>Voltar</Button>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -268,7 +374,7 @@ export default function CadastrarCampeonatoForm() {
             Campeonato
           </button>
           <span className="text-[#808080]">&gt;</span>
-          <span className="text-[#4d4d4d]">Novo campeonato</span>
+          <span className="text-[#4d4d4d]">{isEditing ? "Editar campeonato" : "Novo campeonato"}</span>
         </div>
 
         {/* ═══ SECTION: Dados básicos ═══ */}

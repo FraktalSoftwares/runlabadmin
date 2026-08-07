@@ -124,7 +124,7 @@ export const CampeonatosTable = () => {
                         className="cursor-pointer py-3 px-3 rounded-md hover:bg-[#1A1A1A] border border-transparent hover:border-border/50 transition-all"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/gestao-competicoes/${item.id}/editar`);
+                          navigate(`/gestao-competicoes/campeonatos/${item.id}/editar`);
                         }}
                       >
                         <Pencil className="h-4 w-4 mr-3" />

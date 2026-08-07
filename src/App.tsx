@@ -45,6 +45,7 @@ const App = () => (
             <Route path="/gestao-competicoes" element={<GestaoCompeticoes />} />
             <Route path="/gestao-competicoes/cadastrar-competicao" element={<CadastrarCampeonato />} />
             <Route path="/gestao-competicoes/cadastrar-campeonato" element={<CadastrarCampeonatoForm />} />
+            <Route path="/gestao-competicoes/campeonatos/:id/editar" element={<CadastrarCampeonatoForm />} />
             <Route path="/gestao-competicoes/:id" element={<CompeticaoDetalhes />} />
             <Route path="/gestao-competicoes/:id/editar" element={<EditarCompeticao />} />
             <Route path="/minha-conta" element={<MinhaConta />} />

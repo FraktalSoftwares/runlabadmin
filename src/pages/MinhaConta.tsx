@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { AddUserSheet } from "@/components/AddUserSheet";
@@ -20,7 +20,159 @@ import {
 } from "@/lib/permissions";
 import { toast } from "sonner";
 
-type AdminListItem = { id: string; full_name: string | null; email: string | null };
+type AdminRemovalStatus = "indeterminate" | "removable" | "protected" | "removed";
+
+type AdminListItem = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  removal_status: AdminRemovalStatus | null;
+  can_remove: boolean;
+};
+
+type RemoveAdminSuccess = {
+  status: "removed" | "already_removed";
+  request_id: string;
+  target_user_id: string;
+};
+
+type RemoveAdminErrorCode =
+  | "INVALID_REQUEST"
+  | "UNAUTHENTICATED"
+  | "FORBIDDEN"
+  | "TARGET_NOT_FOUND"
+  | "SELF_REMOVAL_FORBIDDEN"
+  | "LAST_ADMIN_FORBIDDEN"
+  | "ADMIN_RECONCILIATION_PENDING"
+  | "ADMIN_PROTECTED"
+  | "REMOVAL_CONFLICT"
+  | "METHOD_NOT_ALLOWED"
+  | "INTERNAL_ERROR";
+
+type RemovalAttempt = {
+  actorUserId: string;
+  targetUserId: string;
+  requestId: string;
+  removalConfirmed: boolean;
+};
+
+const REMOVAL_ATTEMPTS_STORAGE_KEY = "runlab-admin-removal-attempts";
+
+const REMOVE_ADMIN_ERROR_MESSAGES: Record<RemoveAdminErrorCode, string> = {
+  INVALID_REQUEST: "A solicitação de remoção é inválida. Atualize a página e tente novamente.",
+  UNAUTHENTICATED: "Sua sessão expirou. Entre novamente para continuar.",
+  FORBIDDEN: "Você não tem permissão para remover administradores.",
+  TARGET_NOT_FOUND: "Administrador não encontrado. Atualize a lista e tente novamente.",
+  SELF_REMOVAL_FORBIDDEN: "Você não pode remover sua própria conta administrativa.",
+  LAST_ADMIN_FORBIDDEN: "Não é possível remover o último administrador.",
+  ADMIN_RECONCILIATION_PENDING: "Este administrador aguarda reconciliação e não pode ser removido.",
+  ADMIN_PROTECTED: "Este administrador está protegido e não pode ser removido.",
+  REMOVAL_CONFLICT: "A remoção entrou em conflito com outra operação. Atualize a lista e tente novamente.",
+  METHOD_NOT_ALLOWED: "A remoção não está disponível nesta versão. Atualize a página e tente novamente.",
+  INTERNAL_ERROR: "Não foi possível remover o administrador. Tente novamente.",
+};
+
+const isRemoveAdminErrorCode = (value: unknown): value is RemoveAdminErrorCode =>
+  typeof value === "string" && value in REMOVE_ADMIN_ERROR_MESSAGES;
+
+const getRemoveAdminErrorMessage = async (error: unknown): Promise<string> => {
+  const context = (error as { context?: Response })?.context;
+  if (context && typeof context.clone === "function") {
+    try {
+      const body = (await context.clone().json()) as { error?: unknown };
+      if (isRemoveAdminErrorCode(body.error)) {
+        return REMOVE_ADMIN_ERROR_MESSAGES[body.error];
+      }
+    } catch {
+      // A resposta pode não ser JSON em falhas de rede ou gateway.
+    }
+  }
+
+  return "Não foi possível confirmar a remoção. Tente novamente.";
+};
+
+const getRemovalStatusLabel = (
+  admin: AdminListItem | undefined,
+  isSelf: boolean,
+): string => {
+  if (isSelf) return "Sua própria conta não pode ser removida.";
+  if (!admin) return "Status de remoção indisponível.";
+
+  switch (admin.removal_status) {
+    case "removable":
+      return admin.can_remove
+        ? "Administrador elegível para remoção."
+        : "Este administrador não pode ser removido no momento.";
+    case "indeterminate":
+      return "Reconciliação pendente. A remoção está bloqueada.";
+    case "protected":
+      return "Administrador protegido. A remoção está bloqueada.";
+    case "removed":
+      return "A remoção deste administrador já foi concluída.";
+    default:
+      return "Status de remoção indisponível. A remoção está bloqueada.";
+  }
+};
+
+const getRemovalBlockedMessage = (admin: AdminListItem): string => {
+  switch (admin.removal_status) {
+    case "indeterminate":
+      return REMOVE_ADMIN_ERROR_MESSAGES.ADMIN_RECONCILIATION_PENDING;
+    case "protected":
+      return REMOVE_ADMIN_ERROR_MESSAGES.ADMIN_PROTECTED;
+    default:
+      return "Este administrador não pode ser removido no momento.";
+  }
+};
+
+const loadRemovalAttempts = (): Map<string, RemovalAttempt> => {
+  if (typeof window === "undefined") return new Map();
+
+  try {
+    const stored = window.sessionStorage.getItem(REMOVAL_ATTEMPTS_STORAGE_KEY);
+    if (!stored) return new Map();
+
+    const attempts = JSON.parse(stored) as RemovalAttempt[];
+    if (!Array.isArray(attempts)) return new Map();
+
+    return new Map(
+      attempts
+        .filter(
+          (attempt) =>
+            typeof attempt?.actorUserId === "string" &&
+            typeof attempt?.targetUserId === "string" &&
+            typeof attempt?.requestId === "string" &&
+            typeof attempt?.removalConfirmed === "boolean",
+        )
+        .map((attempt) => [attempt.targetUserId, attempt]),
+    );
+  } catch (error) {
+    console.warn("Não foi possível restaurar tentativas de remoção.", error);
+    return new Map();
+  }
+};
+
+const persistRemovalAttempts = (
+  attempts: Map<string, RemovalAttempt>,
+): boolean => {
+  if (typeof window === "undefined") return false;
+
+  try {
+    if (attempts.size === 0) {
+      window.sessionStorage.removeItem(REMOVAL_ATTEMPTS_STORAGE_KEY);
+      return true;
+    }
+
+    window.sessionStorage.setItem(
+      REMOVAL_ATTEMPTS_STORAGE_KEY,
+      JSON.stringify(Array.from(attempts.values())),
+    );
+    return true;
+  } catch (error) {
+    console.warn("Não foi possível persistir a tentativa de remoção.", error);
+    return false;
+  }
+};
 
 const MinhaConta = () => {
   const navigate = useNavigate();
@@ -41,6 +193,7 @@ const MinhaConta = () => {
   const [selectedUserPermsLoaded, setSelectedUserPermsLoaded] = useState(false);
   const [savingPerms, setSavingPerms] = useState(false);
   const [excludingUserId, setExcludingUserId] = useState<string | null>(null);
+  const removalAttemptsRef = useRef<Map<string, RemovalAttempt> | null>(null);
   const [termosUso, setTermosUso] = useState<string | null>(null);
   const [politicaPrivacidade, setPoliticaPrivacidade] = useState<string | null>(null);
   const [sobreLoading, setSobreLoading] = useState(false);
@@ -97,6 +250,25 @@ const MinhaConta = () => {
   
   const canEditAcessos = hasPermission("acessos.edit");
 
+  const fetchAdminList = useCallback(async (): Promise<AdminListItem[]> => {
+    const { data, error } = await supabase.rpc("get_admin_list");
+    if (error) throw error;
+
+    const admins = (data ?? []) as AdminListItem[];
+    setAdminList(admins);
+    return admins;
+  }, []);
+
+  const fetchAdminListForRemoval = useCallback(async (): Promise<AdminListItem[]> => {
+    try {
+      return await fetchAdminList();
+    } catch {
+      throw new Error(
+        "Não foi possível confirmar o estado do administrador. Tente novamente.",
+      );
+    }
+  }, [fetchAdminList]);
+
   useEffect(() => {
     if (!permissionsLoading && activeTab === "acessos" && !hasPermission("acessos.view")) {
       setActiveTab("dados-basicos");
@@ -106,15 +278,11 @@ const MinhaConta = () => {
   useEffect(() => {
     if (activeTab === "acessos" && hasPermission("acessos.view")) {
       setAdminListLoading(true);
-      supabase
-        .rpc("get_admin_list")
-        .then(({ data, error }) => {
-          if (!error && data) setAdminList(data as AdminListItem[]);
-          else setAdminList([]);
-          setAdminListLoading(false);
-        });
+      fetchAdminList()
+        .catch(() => setAdminList([]))
+        .finally(() => setAdminListLoading(false));
     }
-  }, [activeTab, hasPermission]);
+  }, [activeTab, fetchAdminList, hasPermission]);
 
   useEffect(() => {
     if (activeTab === "sobre") {
@@ -190,20 +358,123 @@ const MinhaConta = () => {
   };
 
   const handleExcluirAdmin = async (targetId: string) => {
-    if (!canEditAcessos || targetId === user?.id) return;
+    const targetAdmin = adminList.find((admin) => admin.id === targetId);
+    if (
+      !canEditAcessos ||
+      !user?.id ||
+      targetId === user.id ||
+      targetAdmin?.can_remove !== true
+    ) {
+      return;
+    }
+
+    const attempts =
+      removalAttemptsRef.current ?? loadRemovalAttempts();
+    removalAttemptsRef.current = attempts;
+    let attempt = attempts.get(targetId);
+    if (!attempt || attempt.actorUserId !== user.id) {
+      attempt = {
+        actorUserId: user.id,
+        targetUserId: targetId,
+        requestId: crypto.randomUUID(),
+        removalConfirmed: false,
+      };
+      attempts.set(targetId, attempt);
+      if (!persistRemovalAttempts(attempts)) {
+        attempts.delete(targetId);
+        toast.error(
+          "Não foi possível preparar uma tentativa segura de remoção. Tente novamente.",
+        );
+        return;
+      }
+    }
+
     setExcludingUserId(targetId);
     try {
-      await supabase.from("admin_permissions").delete().eq("user_id", targetId);
-      await supabase
-        .from("profiles")
-        .update({ tipo_user: "Corredor", updated_at: new Date().toISOString() })
-        .eq("id", targetId);
+      setAdminListLoading(true);
+      const currentAdmins = await fetchAdminListForRemoval();
+      const currentTarget = currentAdmins.find(
+        (admin) => admin.id === targetId,
+      );
+
+      if (!currentTarget) {
+        attempts.delete(targetId);
+        persistRemovalAttempts(attempts);
+        toast.success("Usuário removido do painel administrativo.");
+        setSelectedUserId(null);
+        return;
+      }
+
+      if (currentTarget.can_remove !== true) {
+        throw new Error(getRemovalBlockedMessage(currentTarget));
+      }
+
+      if (attempt.removalConfirmed) {
+        attempt = {
+          actorUserId: user.id,
+          targetUserId: targetId,
+          requestId: crypto.randomUUID(),
+          removalConfirmed: false,
+        };
+        attempts.set(targetId, attempt);
+        if (!persistRemovalAttempts(attempts)) {
+          attempts.delete(targetId);
+          throw new Error(
+            "Não foi possível preparar uma nova tentativa segura de remoção.",
+          );
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke("remove-admin", {
+        body: {
+          target_user_id: targetId,
+          request_id: attempt.requestId,
+        },
+      });
+
+      if (error) {
+        throw new Error(await getRemoveAdminErrorMessage(error));
+      }
+
+      const result = data as Partial<RemoveAdminSuccess> | null;
+      const isExpectedResult =
+        (result?.status === "removed" || result?.status === "already_removed") &&
+        result.request_id === attempt.requestId &&
+        result.target_user_id === targetId;
+
+      if (!isExpectedResult) {
+        throw new Error("A remoção não retornou uma confirmação válida. Tente novamente.");
+      }
+
+      attempt.removalConfirmed = true;
+      persistRemovalAttempts(attempts);
+
+      setAdminListLoading(true);
+      const refreshedAdmins = await fetchAdminListForRemoval();
+      if (refreshedAdmins.some((admin) => admin.id === targetId)) {
+        const nextAttempt: RemovalAttempt = {
+          actorUserId: user.id,
+          targetUserId: targetId,
+          requestId: crypto.randomUUID(),
+          removalConfirmed: false,
+        };
+        attempts.set(targetId, nextAttempt);
+        if (!persistRemovalAttempts(attempts)) {
+          attempts.delete(targetId);
+        }
+        throw new Error(
+          "O administrador continua ativo. Tente novamente para iniciar uma nova remoção segura.",
+        );
+      }
+
+      attempts.delete(targetId);
+      persistRemovalAttempts(attempts);
       toast.success("Usuário removido do painel administrativo.");
       setSelectedUserId(null);
-      setAdminList((prev) => prev.filter((a) => a.id !== targetId));
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Erro ao remover.");
     } finally {
+      setAdminListLoading(false);
       setExcludingUserId(null);
     }
   };
@@ -696,6 +967,8 @@ const MinhaConta = () => {
                 {selectedUserId && (() => {
                   const admin = adminList.find((a) => a.id === selectedUserId);
                   const isSelf = selectedUserId === user?.id;
+                  const canRemoveAdmin =
+                    canEditAcessos && !isSelf && admin?.can_remove === true;
                   return (
                     <div className="bg-[#1C1C1C] rounded-lg p-6 space-y-6">
                       <div className="flex items-center gap-4">
@@ -707,6 +980,9 @@ const MinhaConta = () => {
                         <div>
                           <h3 className="font-semibold text-foreground">{admin?.full_name || "—"}</h3>
                           <p className="text-sm text-muted-foreground">{admin?.email ?? "—"}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {getRemovalStatusLabel(admin, isSelf)}
+                          </p>
                         </div>
                       </div>
 
@@ -753,16 +1029,16 @@ const MinhaConta = () => {
                         </div>
                       )}
 
-                      {canEditAcessos && !isSelf && (
+                      {canEditAcessos && (
                         <div className="pt-4">
                           <Button
                             variant="ghost"
                             className="gap-2 text-red-500 hover:bg-red-500/10 hover:text-red-500"
-                            disabled={!!excludingUserId}
+                            disabled={!!excludingUserId || !canRemoveAdmin}
                             onClick={() => handleExcluirAdmin(selectedUserId)}
                           >
                             {excludingUserId === selectedUserId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                            Excluir usuário
+                            Remover administrador
                           </Button>
                         </div>
                       )}
@@ -805,8 +1081,8 @@ const MinhaConta = () => {
         onSuccess={() => {
           setIsAddUserSheetOpen(false);
           if (activeTab === "acessos") {
-            supabase.rpc("get_admin_list").then(({ data }) => {
-              if (data) setAdminList(data as AdminListItem[]);
+            fetchAdminList().catch(() => {
+              toast.error("Convite enviado, mas não foi possível atualizar a lista de administradores.");
             });
           }
         }}

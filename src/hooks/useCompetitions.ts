@@ -17,7 +17,11 @@ export type CompetitionRow = {
   formato: string;
   campeonato: string;
   status: CompetitionStatus;
-  endsAt: string | null;
+  regulamento: {
+    count: number;
+    title: string;
+    fileUrl: string;
+  } | null;
 };
 
 type DbStatus = "draft" | "open" | "closed" | "in_progress" | "finished";
@@ -111,6 +115,25 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
     });
   }
 
+  const { data: documents, error: documentsError } = ids.length > 0
+    ? await supabase
+      .from("competition_documents")
+      .select("competition_id, title, file_url, sort_order")
+      .in("competition_id", ids)
+      .order("sort_order", { ascending: true })
+    : { data: [], error: null };
+  if (documentsError) throw documentsError;
+
+  const documentsByCompetition: Record<string, { title: string; fileUrl: string }[]> = {};
+  (documents ?? []).forEach((document) => {
+    const list = documentsByCompetition[document.competition_id] ?? [];
+    list.push({
+      title: document.title,
+      fileUrl: document.file_url,
+    });
+    documentsByCompetition[document.competition_id] = list;
+  });
+
   // Buscar nomes dos campeonatos vinculados
   const championshipIds = [...new Set(
     (competitions ?? []).map((c) => c.championship_id).filter(Boolean)
@@ -158,7 +181,13 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
     formato: formatLabel(c.format_type),
     campeonato: c.championship_id ? (championshipNames[c.championship_id] ?? "-") : "-",
     status: mapStatus(c.status as DbStatus),
-    endsAt: c.ends_at ?? null,
+    regulamento: documentsByCompetition[c.id]?.length
+      ? {
+        count: documentsByCompetition[c.id].length,
+        title: documentsByCompetition[c.id][0].title,
+        fileUrl: documentsByCompetition[c.id][0].fileUrl,
+      }
+      : null,
   }));
 }
 
@@ -196,7 +225,10 @@ export function useCompetitions(filters: CompetitionFilters = {}) {
     fetchCompetitions();
   }, [fetchCompetitions]);
 
-  useRealtimeRefetch(["competitions", "competition_registrations"], fetchCompetitions);
+  useRealtimeRefetch(
+    ["competitions", "competition_registrations", "competition_documents"],
+    fetchCompetitions,
+  );
 
   return { data, loading, error, refetch: fetchCompetitions };
 }

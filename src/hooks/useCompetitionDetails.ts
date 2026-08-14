@@ -235,7 +235,7 @@ export function useCompetitionDetails(id: string | undefined) {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchDetails = useCallback(async () => {
-    if (!id) return;
+    if (!id) return null;
     setLoading(true);
     setError(null);
 
@@ -265,11 +265,13 @@ export function useCompetitionDetails(id: string | undefined) {
         .order("sort_order");
 
       // 4. Fetch documents
-      const { data: documents } = await supabase
+      const { data: documents, error: documentsError } = await supabase
         .from("competition_documents")
         .select("*")
         .eq("competition_id", id)
         .order("sort_order");
+
+      if (documentsError) throw documentsError;
 
       // 5. Fetch sponsors
       const sponsorIds: string[] = comp.competition_sponsors || [];
@@ -318,7 +320,7 @@ export function useCompetitionDetails(id: string | undefined) {
       const startsOn = resolveLocalDate(comp.starts_on, comp.starts_at);
       if (!startsOn) throw new Error("Competição sem data de início");
 
-      setData({
+      const nextData: CompetitionDetail = {
         id: comp.id,
         title: comp.title,
         subtitle: comp.subtitle,
@@ -373,11 +375,14 @@ export function useCompetitionDetails(id: string | undefined) {
           totalRegistrations,
           totalRevenueCents,
         },
-      });
+      };
+
+      setData(nextData);
+      return nextData;
     } catch (e) {
-      setError(
-        e instanceof Error ? e : new Error("Erro ao carregar detalhes")
-      );
+      const nextError = e instanceof Error ? e : new Error("Erro ao carregar detalhes");
+      setError(nextError);
+      return null;
     } finally {
       setLoading(false);
     }

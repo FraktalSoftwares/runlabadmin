@@ -121,18 +121,6 @@ export const CompeticoesTable = () => {
     if (!closeDialogOpen) setCloseConfirmText("");
   }, [closeDialogOpen]);
 
-  const formatRemaining = (endsAt: string | null): string | null => {
-    if (!endsAt) return null;
-    const end = new Date(endsAt).getTime();
-    const diff = end - Date.now();
-    if (diff <= 0) return null;
-    const days = Math.floor(diff / 86_400_000);
-    const hours = Math.floor((diff % 86_400_000) / 3_600_000);
-    if (days > 0) return `${days}d ${hours}h`;
-    const minutes = Math.floor((diff % 3_600_000) / 60_000);
-    return `${hours}h ${minutes}min`;
-  };
-
   useEffect(() => {
     setPage(1);
   }, [rows.length]);
@@ -243,6 +231,7 @@ export const CompeticoesTable = () => {
               <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Tipo</TableHead>
               <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Formato</TableHead>
               <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Campeonato</TableHead>
+              <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Regulamento</TableHead>
               <TableHead className="font-medium" style={{ color: '#E0E0E0' }}>Status</TableHead>
               <TableHead className="font-medium w-12"></TableHead>
             </TableRow>
@@ -250,7 +239,7 @@ export const CompeticoesTable = () => {
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-12">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-12">
                   Nenhuma competição encontrada.
                 </TableCell>
               </TableRow>
@@ -273,6 +262,25 @@ export const CompeticoesTable = () => {
                     <TableCell className="text-foreground">{row.tipo}</TableCell>
                     <TableCell className="text-foreground">{row.formato}</TableCell>
                     <TableCell className="text-foreground">{row.campeonato}</TableCell>
+                    <TableCell className="text-foreground">
+                      {row.regulamento ? (
+                        <a
+                          href={row.regulamento.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex max-w-[180px] flex-col text-left hover:underline"
+                          title={row.regulamento.title}
+                        >
+                          <span className="truncate text-primary">{row.regulamento.title}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {row.regulamento.count} documento{row.regulamento.count === 1 ? "" : "s"}
+                          </span>
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>{getStatusBadge(row.status)}</TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -492,33 +500,19 @@ export const CompeticoesTable = () => {
                   marcada como finalizada. Novas inscrições e corridas não serão mais aceitas.
                   Essa ação pode ser revertida ativando a competição novamente.
                 </p>
-                {(() => {
-                  const remaining = formatRemaining(selectedItem?.endsAt ?? null);
-                  const inscritos = selectedItem?.inscritos ?? 0;
-                  if (!remaining) return null;
-                  return (
-                    <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-foreground">
-                      <p className="font-semibold text-yellow-300">Atenção: competição ainda em curso</p>
-                      <ul className="mt-2 list-disc list-inside text-sm space-y-1">
-                        <li>Prazo restante: <strong>{remaining}</strong></li>
-                        <li>Inscritos ativos: <strong>{inscritos}</strong></li>
-                      </ul>
-                      <div className="mt-3 space-y-2">
-                        <Label htmlFor="confirm-close-name" className="text-xs text-muted-foreground">
-                          Para confirmar, digite o nome exato da competição:
-                        </Label>
-                        <Input
-                          id="confirm-close-name"
-                          autoComplete="off"
-                          value={closeConfirmText}
-                          onChange={(e) => setCloseConfirmText(e.target.value)}
-                          placeholder={selectedItem?.nome ?? ""}
-                          className="bg-[#262626] border-border"
-                        />
-                      </div>
-                    </div>
-                  );
-                })()}
+                <div className="mt-3 space-y-2">
+                  <Label htmlFor="confirm-close-name" className="text-xs text-muted-foreground">
+                    Para confirmar, digite o nome exato da competição:
+                  </Label>
+                  <Input
+                    id="confirm-close-name"
+                    autoComplete="off"
+                    value={closeConfirmText}
+                    onChange={(e) => setCloseConfirmText(e.target.value)}
+                    placeholder={selectedItem?.nome ?? ""}
+                    className="bg-[#262626] border-border"
+                  />
+                </div>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -535,8 +529,7 @@ export const CompeticoesTable = () => {
               onClick={handleClose}
               disabled={
                 actionLoading ||
-                (!!formatRemaining(selectedItem?.endsAt ?? null) &&
-                  closeConfirmText.trim() !== (selectedItem?.nome ?? "").trim())
+                closeConfirmText.trim() !== (selectedItem?.nome ?? "").trim()
               }
             >
               {actionLoading ? (

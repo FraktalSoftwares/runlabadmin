@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRealtimeRefetch } from "./useSupabaseRealtime";
+import { formatLocalDate, formatLocalDateRange, resolveLocalDate } from "@/lib/localDate";
 
 // ─── Types ───────────────────────────────────────────────
 
@@ -42,10 +43,10 @@ export type CompetitionDetail = {
   title: string;
   subtitle: string | null;
   locationName: string | null;
-  startsAt: string;
-  endsAt: string | null;
-  registrationStartsAt: string | null;
-  registrationEndsAt: string | null;
+  startsOn: string;
+  endsOn: string | null;
+  registrationStartsOn: string | null;
+  registrationEndsOn: string | null;
   mode: string;
   formatType: string;
   formatObservations: string | null;
@@ -212,8 +213,7 @@ export const mapHiddenReason = (reason: string | null): string => {
 };
 
 export const formatDateBR = (date: string | null): string => {
-  if (!date) return "-";
-  return new Date(date).toLocaleDateString("pt-BR", {
+  return formatLocalDate(date, {
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -224,11 +224,7 @@ export const formatDateRangeBR = (
   start: string | null,
   end: string | null
 ): string => {
-  if (!start && !end) return "-";
-  const s = start ? formatDateBR(start) : "";
-  const e = end ? formatDateBR(end) : "";
-  if (s && e) return `${s} - ${e}`;
-  return s || e;
+  return formatLocalDateRange(start, end);
 };
 
 // ─── Hook: Competition Details ───────────────────────────
@@ -319,15 +315,24 @@ export function useCompetitionDetails(id: string | undefined) {
           });
       }
 
+      const startsOn = resolveLocalDate(comp.starts_on, comp.starts_at);
+      if (!startsOn) throw new Error("Competição sem data de início");
+
       setData({
         id: comp.id,
         title: comp.title,
         subtitle: comp.subtitle,
         locationName: comp.location_name,
-        startsAt: comp.starts_at,
-        endsAt: comp.ends_at ?? null,
-        registrationStartsAt: comp.registration_starts_at,
-        registrationEndsAt: comp.registration_ends_at,
+        startsOn,
+        endsOn: resolveLocalDate(comp.ends_on, comp.ends_at),
+        registrationStartsOn: resolveLocalDate(
+          comp.registration_starts_on,
+          comp.registration_starts_at,
+        ),
+        registrationEndsOn: resolveLocalDate(
+          comp.registration_ends_on,
+          comp.registration_ends_at,
+        ),
         mode: comp.mode,
         formatType: comp.format_type ?? "oficial",
         formatObservations: comp.format_observations ?? null,

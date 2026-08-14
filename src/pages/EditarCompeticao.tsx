@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCompetitionDetails } from "@/hooks/useCompetitionDetails";
 import { supabase } from "@/lib/supabase";
+import { calendarFromLocalDate, localDateFromCalendar } from "@/lib/localDate";
 
 function formatPriceCentsToInput(cents: number | null): string {
   if (cents === null || cents === undefined) return "";
@@ -95,7 +96,7 @@ const formSchema = z.object({
   campeonato: z.string().optional(),
   inscricaoInicio: z.date().optional(),
   inscricaoFim: z.date().optional(),
-  competicaoInicio: z.date().optional(),
+  competicaoInicio: z.date({ required_error: "Data da competição é obrigatória" }),
   competicaoFim: z.date().optional(),
   tentativasIlimitadas: z.boolean().optional(),
   numeroMaximoInscritos: z.boolean().optional(),
@@ -207,10 +208,10 @@ const EditarCompeticao = () => {
       formato: formatValue as "oficial" | "patrocinada" | "personalizado",
       formatoObservacoes: competition.formatObservations ?? "",
       campeonato: competition.championshipId ?? "",
-      inscricaoInicio: competition.registrationStartsAt ? new Date(competition.registrationStartsAt) : undefined,
-      inscricaoFim: competition.registrationEndsAt ? new Date(competition.registrationEndsAt) : undefined,
-      competicaoInicio: competition.startsAt ? new Date(competition.startsAt) : undefined,
-      competicaoFim: competition.endsAt ? new Date(competition.endsAt) : undefined,
+      inscricaoInicio: calendarFromLocalDate(competition.registrationStartsOn),
+      inscricaoFim: calendarFromLocalDate(competition.registrationEndsOn),
+      competicaoInicio: calendarFromLocalDate(competition.startsOn),
+      competicaoFim: calendarFromLocalDate(competition.endsOn),
       tentativasIlimitadas: competition.unlimitedAttempts ?? true,
       numeroMaximoInscritos: competition.maxRegistrations != null,
       maxInscritos: competition.maxRegistrations != null ? String(competition.maxRegistrations) : "",
@@ -317,16 +318,16 @@ const EditarCompeticao = () => {
     const data = result.data;
     setIsSaving(true);
     try {
-      const toEndOfDayIso = (d: Date | undefined | null): string | null => {
-        if (!d) return null;
-        const end = new Date(d);
-        end.setHours(23, 59, 59, 999);
-        return end.toISOString();
-      };
-      const startsAt = data.competicaoInicio?.toISOString() ?? data.inscricaoFim?.toISOString() ?? new Date().toISOString();
-      const endsAt = toEndOfDayIso(data.competicaoFim);
-      const regStart = data.inscricaoInicio?.toISOString() ?? null;
-      const regEnd = toEndOfDayIso(data.inscricaoFim);
+      const startsOn = localDateFromCalendar(data.competicaoInicio);
+      const endsOn = data.competicaoFim
+        ? localDateFromCalendar(data.competicaoFim)
+        : null;
+      const registrationStartsOn = data.inscricaoInicio
+        ? localDateFromCalendar(data.inscricaoInicio)
+        : null;
+      const registrationEndsOn = data.inscricaoFim
+        ? localDateFromCalendar(data.inscricaoFim)
+        : null;
       const isFree = data.tipoCompeticao === "gratuita";
       const championshipId = data.campeonato && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
       const maxRegistrations = data.numeroMaximoInscritos && data.maxInscritos?.trim()
@@ -338,10 +339,10 @@ const EditarCompeticao = () => {
         .update({
           title: data.nome.trim(),
           description: data.descricao?.trim() || null,
-          starts_at: startsAt,
-          ends_at: endsAt,
-          registration_starts_at: regStart,
-          registration_ends_at: regEnd,
+          starts_on: startsOn,
+          ends_on: endsOn,
+          registration_starts_on: registrationStartsOn,
+          registration_ends_on: registrationEndsOn,
           mode: data.modalidade ?? "outdoor",
           format_type: data.formato ?? "oficial",
           format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,

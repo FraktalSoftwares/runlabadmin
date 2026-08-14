@@ -188,16 +188,16 @@ const DetalhesTab = ({ competition }: { competition: CompetitionDetail }) => {
                 <p className="text-xs text-muted-foreground mb-2">Período de inscrições</p>
                 <p className="text-base font-medium text-foreground">
                   {formatDateRangeBR(
-                    competition.registrationStartsAt,
-                    competition.registrationEndsAt
+                    competition.registrationStartsOn,
+                    competition.registrationEndsOn
                   )}
                 </p>
               </div>
 
               <div className="pt-6">
-                <p className="text-xs text-muted-foreground mb-2">Data da competição</p>
+                <p className="text-xs text-muted-foreground mb-2">Período da competição</p>
                 <p className="text-base font-medium text-foreground">
-                  {formatDateBR(competition.startsAt)}
+                  {formatDateRangeBR(competition.startsOn, competition.endsOn)}
                 </p>
               </div>
 

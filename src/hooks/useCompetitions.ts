@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { CompetitionFilters } from "@/contexts/CompeticoesFilterContext";
 import { useRealtimeRefetch } from "./useSupabaseRealtime";
+import { formatLocalDate, formatLocalDateRange, resolveLocalDate } from "@/lib/localDate";
 
 export type CompetitionStatus = "aberta" | "em_andamento" | "finalizada" | "fechada" | "rascunho";
 
@@ -39,21 +40,11 @@ const mapStatus = (status: DbStatus | null): CompetitionStatus => {
 };
 
 const formatDateRange = (start: string | null, end: string | null): string => {
-  if (!start && !end) return "-";
-  const opts: Intl.DateTimeFormatOptions = { day: "2-digit", month: "2-digit", year: "2-digit" };
-  const s = start ? new Date(start).toLocaleDateString("pt-BR", opts) : "";
-  const e = end ? new Date(end).toLocaleDateString("pt-BR", opts) : "";
-  if (s && e) return `${s} - ${e}`;
-  return s || e;
+  return formatLocalDateRange(start, end);
 };
 
 const formatSingleDate = (date: string | null): string => {
-  if (!date) return "-";
-  return new Date(date).toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  });
+  return formatLocalDate(date);
 };
 
 /** Mapeia status do filtro (UI) para status do banco */
@@ -91,7 +82,7 @@ function periodToDate(periodo: string | undefined): string | null {
 async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): Promise<CompetitionRow[]> {
   let query = supabase
     .from("competitions")
-    .select("id, title, subtitle, mode, format_type, status, is_free, starts_at, ends_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at, championship_id")
+    .select("id, title, subtitle, mode, format_type, status, is_free, starts_on, ends_on, registration_starts_on, registration_ends_on, starts_at, ends_at, registration_starts_at, registration_ends_at, competition_sponsors, created_at, championship_id")
     .order("created_at", { ascending: false });
 
   const dbStatus = statusToDb(filters.status);
@@ -157,8 +148,11 @@ async function fetchCompetitionsWithFilters(filters: CompetitionFilters = {}): P
     id: c.id,
     nome: c.title ?? "-",
     modalidade: modeLabel(c.mode),
-    prazoInscricoes: formatDateRange(c.registration_starts_at, c.registration_ends_at),
-    prazoProva: formatSingleDate(c.starts_at),
+    prazoInscricoes: formatDateRange(
+      resolveLocalDate(c.registration_starts_on, c.registration_starts_at),
+      resolveLocalDate(c.registration_ends_on, c.registration_ends_at),
+    ),
+    prazoProva: formatSingleDate(resolveLocalDate(c.starts_on, c.starts_at)),
     inscritos: countsByCompetition[c.id] ?? 0,
     tipo: c.is_free ? "Gratuita" : "Paga",
     formato: formatLabel(c.format_type),

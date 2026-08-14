@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import { localDateFromCalendar } from "@/lib/localDate";
 
 const formSchema = z.object({
   nome: z.string().min(1, "Nome é obrigatório"),
@@ -29,7 +30,7 @@ const formSchema = z.object({
   campeonato: z.string().optional(),
   inscricaoInicio: z.date().optional(),
   inscricaoFim: z.date().optional(),
-  competicaoInicio: z.date().optional(),
+  competicaoInicio: z.date({ required_error: "Data da competição é obrigatória" }),
   competicaoFim: z.date().optional(),
   tipoCompeticao: z.enum(["gratuita", "paga"]).optional(),
 });
@@ -198,20 +199,16 @@ const CadastrarCampeonato = () => {
     }
     setIsSubmitting(true);
     try {
-      const toEndOfDayIso = (d: Date | undefined | null): string | null => {
-        if (!d) return null;
-        const end = new Date(d);
-        end.setHours(23, 59, 59, 999);
-        return end.toISOString();
-      };
-      const startsAt = data.competicaoInicio
-        ? data.competicaoInicio.toISOString()
-        : data.inscricaoFim
-          ? data.inscricaoFim.toISOString()
-          : new Date().toISOString();
-      const endsAt = toEndOfDayIso(data.competicaoFim);
-      const regStart = data.inscricaoInicio?.toISOString() ?? null;
-      const regEnd = toEndOfDayIso(data.inscricaoFim);
+      const startsOn = localDateFromCalendar(data.competicaoInicio);
+      const endsOn = data.competicaoFim
+        ? localDateFromCalendar(data.competicaoFim)
+        : null;
+      const registrationStartsOn = data.inscricaoInicio
+        ? localDateFromCalendar(data.inscricaoInicio)
+        : null;
+      const registrationEndsOn = data.inscricaoFim
+        ? localDateFromCalendar(data.inscricaoFim)
+        : null;
       const isFree = data.tipoCompeticao === "gratuita" || lotes.every((l) => parseValorToCents(l.valor) === 0);
       const championshipId =
         data.campeonato && data.campeonato !== "none" && /^[0-9a-f-]{36}$/i.test(data.campeonato) ? data.campeonato : null;
@@ -232,10 +229,10 @@ const CadastrarCampeonato = () => {
           title: data.nome.trim(),
           subtitle: null,
           location_name: null,
-          starts_at: startsAt,
-          ends_at: endsAt,
-          registration_starts_at: regStart,
-          registration_ends_at: regEnd,
+          starts_on: startsOn,
+          ends_on: endsOn,
+          registration_starts_on: registrationStartsOn,
+          registration_ends_on: registrationEndsOn,
           mode: data.modalidade ?? "outdoor",
           format_type: data.formato ?? "oficial",
           format_observations: data.formato === "personalizado" ? (data.formatoObservacoes?.trim() || null) : null,

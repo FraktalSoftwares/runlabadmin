@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { useRealtimeInvalidation } from "./useSupabaseRealtime";
+import { formatLocalDate, resolveLocalDate } from "@/lib/localDate";
 
 export type FinanceiroCompetitionStatus = "aberta" | "em_andamento" | "fechada" | "finalizada" | "rascunho";
 
@@ -33,11 +34,10 @@ function mapStatus(status: DbStatus | null): FinanceiroCompetitionStatus {
   }
 }
 
-function formatEtapa(startsAt: string | null): string {
-  if (!startsAt) return "-";
-  const d = new Date(startsAt);
-  const month = d.toLocaleString("pt-BR", { month: "long" });
-  return `${month.charAt(0).toUpperCase() + month.slice(1)} ${d.getFullYear()}`;
+function formatEtapa(startsOn: string | null): string {
+  if (!startsOn) return "-";
+  return formatLocalDate(startsOn, { month: "long", year: "numeric" })
+    .replace(/^./, (value) => value.toUpperCase());
 }
 
 async function fetchFinanceiroCompeticoes(
@@ -45,7 +45,7 @@ async function fetchFinanceiroCompeticoes(
 ): Promise<FinanceiroCompetitionRow[]> {
   let query = supabase
     .from("competitions")
-    .select("id, title, status, starts_at, is_free, created_at")
+    .select("id, title, status, starts_on, starts_at, is_free, created_at")
     .order("created_at", { ascending: false });
 
   if (search?.trim()) {
@@ -116,7 +116,7 @@ async function fetchFinanceiroCompeticoes(
       id: c.id,
       numericId: c.id.slice(0, 7).replace(/-/g, ""),
       nome: c.title ?? "-",
-      etapaVinculada: formatEtapa(c.starts_at),
+      etapaVinculada: formatEtapa(resolveLocalDate(c.starts_on, c.starts_at)),
       inscricoes: countByComp[c.id] ?? 0,
       margemBruta: margem,
       receitaTotal: receita,

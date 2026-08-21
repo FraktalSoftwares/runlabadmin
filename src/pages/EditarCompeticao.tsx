@@ -514,55 +514,111 @@ const EditarCompeticao = () => {
         }
       }
 
-      // Sincronizar documentos: deletar marcados pra remoção + upload dos novos.
+      // Sincronizar documentos sem remover os atuais antes de confirmar os novos.
       if (id) {
+        const newDocs = [documento1, documento2, documento3].filter(
+          (f): f is File => f != null,
+        );
+        const retainedDocs = existingDocs.filter(
+          (d) => !removedDocIds.includes(d.id),
+        );
+        if (newDocs.length > 0 && retainedDocs.length + newDocs.length > 3) {
+          throw new Error("Uma competição pode ter no máximo 3 documentos.");
+        }
+
+        const uploadedDocs: {
+          path: string;
+          title: string;
+          fileUrl: string;
+          sortOrder: number;
+        }[] = [];
+        let insertedDocIds: string[] = [];
+
+        if (newDocs.length > 0) {
+          const uploadBatchId = Date.now();
+          for (let i = 0; i < newDocs.length; i++) {
+            const file = newDocs[i];
+            const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
+            const path = `competitions/${id}/documents/${uploadBatchId}-${i}.${ext}`;
+            const { error: uploadDocError } = await supabase.storage
+              .from("sistema")
+              .upload(path, file, {
+                contentType: file.type || "application/octet-stream",
+              });
+            if (uploadDocError) {
+              if (uploadedDocs.length > 0) {
+                await supabase.storage
+                  .from("sistema")
+                  .remove(uploadedDocs.map((doc) => doc.path));
+              }
+              throw uploadDocError;
+            }
+            const { data: urlData } = supabase.storage
+              .from("sistema")
+              .getPublicUrl(path);
+            uploadedDocs.push({
+              path,
+              title: file.name,
+              fileUrl: urlData.publicUrl,
+              sortOrder: retainedDocs.length + i,
+            });
+          }
+
+          const { data: insertedDocs, error: insertDocError } = await supabase
+            .from("competition_documents")
+            .insert(
+              uploadedDocs.map((doc) => ({
+                competition_id: id,
+                title: doc.title,
+                file_url: doc.fileUrl,
+                sort_order: doc.sortOrder,
+              })),
+            )
+            .select("id");
+          if (insertDocError) {
+            await supabase.storage
+              .from("sistema")
+              .remove(uploadedDocs.map((doc) => doc.path));
+            throw insertDocError;
+          }
+          insertedDocIds = (insertedDocs ?? []).map((doc) => doc.id);
+        }
+
         if (removedDocIds.length > 0) {
           const docsToDelete = (competition?.documents ?? []).filter((d) =>
             removedDocIds.includes(d.id),
           );
           const storagePaths = docsToDelete
             .map((d) => extractStoragePath(d.fileUrl))
-            .filter((p): p is string => p !== null);
-          if (storagePaths.length > 0) {
-            await supabase.storage.from("sistema").remove(storagePaths);
-          }
+            .filter((path): path is string => path !== null);
           const { error: deleteDocsError } = await supabase
             .from("competition_documents")
             .delete()
             .in("id", removedDocIds);
-          if (deleteDocsError) throw deleteDocsError;
-        }
+          if (deleteDocsError) {
+            if (insertedDocIds.length > 0) {
+              const { error: rollbackDocsError } = await supabase
+                .from("competition_documents")
+                .delete()
+                .in("id", insertedDocIds);
+              if (!rollbackDocsError) {
+                await supabase.storage
+                  .from("sistema")
+                  .remove(uploadedDocs.map((doc) => doc.path));
+              } else {
+                console.error("Erro ao reverter novos documentos:", rollbackDocsError);
+              }
+            }
+            throw deleteDocsError;
+          }
 
-        const newDocs = [documento1, documento2, documento3].filter(
-          (f): f is File => f != null,
-        );
-        if (newDocs.length > 0) {
-          const baseSortOrder = existingDocs.filter(
-            (d) => !removedDocIds.includes(d.id),
-          ).length;
-          for (let i = 0; i < newDocs.length; i++) {
-            const file = newDocs[i];
-            const ext = file.name.split(".").pop()?.toLowerCase() || "pdf";
-            const path = `competitions/${id}/documents/${Date.now()}-${i}.${ext}`;
-            const { error: uploadDocError } = await supabase.storage
+          if (storagePaths.length > 0) {
+            const { error: removeStorageError } = await supabase.storage
               .from("sistema")
-              .upload(path, file, {
-                upsert: true,
-                contentType: file.type || "application/octet-stream",
-              });
-            if (uploadDocError) throw uploadDocError;
-            const { data: urlData } = supabase.storage
-              .from("sistema")
-              .getPublicUrl(path);
-            const { error: insertDocError } = await supabase
-              .from("competition_documents")
-              .insert({
-                competition_id: id,
-                title: file.name,
-                file_url: urlData.publicUrl,
-                sort_order: baseSortOrder + i,
-              });
-            if (insertDocError) throw insertDocError;
+              .remove(storagePaths);
+            if (removeStorageError) {
+              console.warn("Documento removido do banco, mas o arquivo antigo permaneceu no Storage:", removeStorageError);
+            }
           }
         }
       }

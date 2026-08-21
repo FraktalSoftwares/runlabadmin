@@ -30,7 +30,7 @@ function mapStatus(s: string | null): PartnerRow["status"] {
   const t = s.toLowerCase();
   if (t === "pending" || t === "em_analise") return "Em analise";
   if (t === "rejected" || t === "rejeitado") return "Rejeitado";
-  if (t === "inactive" || t === "inativo") return "Inativo";
+  if (t === "inactive" || t === "inativo" || t === "expired") return "Inativo";
   return "Ativo";
 }
 
@@ -45,11 +45,11 @@ async function fetchPartners(
   page: number,
   pageSize: number
 ): Promise<{ data: PartnerRow[]; total: number }> {
-  // Parceiros = quem tem partnership_requests com status 'approved' ou 'inactive' (ativo ou inativo)
+  // Parceiros = solicitações aprovadas, inativadas manualmente ou expiradas.
   const { data: prRows, error: prError } = await supabase
     .from("partnership_requests")
     .select("user_id, partner_type, phone, email, status, created_at")
-    .in("status", ["approved", "inactive"])
+    .in("status", ["approved", "inactive", "expired"])
     .order("created_at", { ascending: false });
 
   if (prError) throw prError;
@@ -138,12 +138,13 @@ export function usePartners(filters: PartnersFilters, page: number, pageSize: nu
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const { search, status, type } = filters;
 
   const fetch = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchPartners(filters, page, pageSize);
+      const result = await fetchPartners({ search, status, type }, page, pageSize);
       setData(result.data);
       setTotal(result.total);
     } catch (e) {
@@ -153,7 +154,7 @@ export function usePartners(filters: PartnersFilters, page: number, pageSize: nu
     } finally {
       setLoading(false);
     }
-  }, [filters.search, filters.status, filters.type, page, pageSize]);
+  }, [search, status, type, page, pageSize]);
 
   useEffect(() => {
     fetch();

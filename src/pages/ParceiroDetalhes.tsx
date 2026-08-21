@@ -431,21 +431,15 @@ const ParceiroDetalhes = () => {
         parceiroNome={parceiro.name}
         onConfirm={async () => {
           try {
-            const now = new Date().toISOString();
-            const { error: errProfile } = await supabase
-              .from("profiles")
-              .update({ is_partner: false, tipo_user: "Corredor", updated_at: now })
-              .eq("id", parceiro.id);
-            if (errProfile) throw errProfile;
-
-            await supabase
-              .from("partnership_requests")
-              .update({ status: "inactive" })
-              .eq("user_id", parceiro.id);
+            const { error: inactivateError } = await supabase.rpc("set_partner_active", {
+              p_user_id: parceiro.id,
+              p_active: false,
+            });
+            if (inactivateError) throw inactivateError;
 
             toast.success("Parceiro inativado", { description: `${parceiro.name} foi inativado com sucesso.` });
             setIsInativarDialogOpen(false);
-            refetch();
+            await refetch();
           } catch (e) {
             toast.error("Erro ao inativar", { description: e instanceof Error ? e.message : "Não foi possível inativar o parceiro." });
           }

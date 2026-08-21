@@ -86,7 +86,6 @@ export const RegisterPartnerSheet = ({ open, onOpenChange }: RegisterPartnerShee
           const { error: updateError } = await supabase
             .from("partnership_requests")
             .update({
-              status: "approved",
               partner_type: partnerType,
               phone: phone || null,
               city,
@@ -96,10 +95,16 @@ export const RegisterPartnerSheet = ({ open, onOpenChange }: RegisterPartnerShee
             .eq("id", existing[0].id);
 
           if (updateError) throw updateError;
+
+          const { error: activateError } = await supabase.rpc("set_partner_active", {
+            p_user_id: userId,
+            p_active: true,
+          });
+          if (activateError) throw activateError;
           toast.success("Parceiro reativado com sucesso!");
         }
       } else {
-        // Criar nova solicitação já aprovada
+        // Criar a solicitação inativa e ativar perfil + parceria atomicamente.
         const { error: insertError } = await supabase
           .from("partnership_requests")
           .insert({
@@ -109,16 +114,16 @@ export const RegisterPartnerSheet = ({ open, onOpenChange }: RegisterPartnerShee
             phone: phone || null,
             city,
             state,
-            status: "approved",
+            status: "inactive",
           });
 
         if (insertError) throw insertError;
 
-        // Atualizar perfil para marcar como parceiro
-        await supabase
-          .from("profiles")
-          .update({ is_partner: true, tipo_user: "Parceiro" })
-          .eq("id", userId);
+        const { error: activateError } = await supabase.rpc("set_partner_active", {
+          p_user_id: userId,
+          p_active: true,
+        });
+        if (activateError) throw activateError;
 
         toast.success("Parceiro cadastrado com sucesso!");
       }

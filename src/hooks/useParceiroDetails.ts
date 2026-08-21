@@ -131,7 +131,7 @@ function mapPartnershipStatus(status: string | null): string {
   if (s === "pending" || s === "em_analise") return "Em análise";
   if (s === "approved" || s === "ativo") return "Ativo";
   if (s === "rejected" || s === "rejeitado") return "Rejeitado";
-  if (s === "inactive" || s === "inativo") return "Inativo";
+  if (s === "inactive" || s === "inativo" || s === "expired") return "Inativo";
   return status;
 }
 

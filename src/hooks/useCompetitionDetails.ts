@@ -511,8 +511,8 @@ export function useCompetitionRegistrations(
       }
 
       let query = supabase
-        .from("v_admin_competition_registered_users")
-        .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size, attempts", {
+        .from("competition_registrations")
+        .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size", {
           count: "exact",
         })
         .eq("competition_id", competitionId)
@@ -559,6 +559,18 @@ export function useCompetitionRegistrations(
         profileMap[p.id] = p;
       });
 
+      const { data: runs } = await supabase
+        .from("user_runs")
+        .select("user_id")
+        .eq("competition_id", competitionId)
+        .in("user_id", userIds)
+        .not("started_at", "is", null);
+
+      const attemptsByUser: Record<string, number> = {};
+      (runs || []).forEach((run) => {
+        attemptsByUser[run.user_id] = (attemptsByUser[run.user_id] ?? 0) + 1;
+      });
+
       // Fetch distances for the fetched registrations
       const regDistanceIds = [
         ...new Set(regs.filter((r) => r.distance_id).map((r) => r.distance_id)),
@@ -599,7 +611,7 @@ export function useCompetitionRegistrations(
           userAvatar: profile?.avatar_url || null,
           distanceLabel: distance?.label || null,
           distanceMeters: distance?.meters || null,
-          attempts: r.attempts || 0,
+          attempts: attemptsByUser[r.user_id] ?? 0,
           priceCents: lot?.price_cents ?? null,
           lotName: lot?.name || null,
           lotHasKit: lot?.has_kit ?? false,
@@ -744,8 +756,8 @@ export function downloadCsv(content: string, filename: string) {
 export async function exportRegistrationsCsv(competitionId: string) {
   // Fetch ALL registrations (no pagination)
   const { data: regs, error: regsError } = await supabase
-    .from("v_admin_competition_registered_users")
-    .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size, attempts")
+    .from("competition_registrations")
+    .select("id, user_id, distance_id, lot_id, status, created_at, shirt_size")
     .eq("competition_id", competitionId)
     .neq("status", "cancelled")
     .order("created_at", { ascending: false });
@@ -764,6 +776,18 @@ export async function exportRegistrationsCsv(competitionId: string) {
   const profileMap: Record<string, string> = {};
   (profiles || []).forEach((p) => {
     profileMap[p.id] = p.full_name || "Desconhecido";
+  });
+
+  const { data: runs } = await supabase
+    .from("user_runs")
+    .select("user_id")
+    .eq("competition_id", competitionId)
+    .in("user_id", userIds)
+    .not("started_at", "is", null);
+
+  const attemptsByUser: Record<string, number> = {};
+  (runs || []).forEach((run) => {
+    attemptsByUser[run.user_id] = (attemptsByUser[run.user_id] ?? 0) + 1;
   });
 
   const distanceIds = [
@@ -800,10 +824,10 @@ export async function exportRegistrationsCsv(competitionId: string) {
     return [
       profileMap[r.user_id] || "Desconhecido",
       r.distance_id ? distanceMap[r.distance_id] || "-" : "-",
-      String(r.attempts || 0),
+      String(attemptsByUser[r.user_id] ?? 0),
       lot?.name || "-",
       lot ? formatPrice(lot.price_cents) : "-",
-      lot?.has_kit ? (r.shirt_size ?? "-") : "-",
+      r.shirt_size ?? "-",
       mapRegistrationStatus(r.status),
       new Date(r.created_at).toLocaleDateString("pt-BR"),
     ];

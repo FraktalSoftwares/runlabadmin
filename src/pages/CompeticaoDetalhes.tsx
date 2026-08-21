@@ -428,7 +428,7 @@ const InscricoesTab = ({
                   {formatPrice(reg.priceCents)}
                 </TableCell>
                 <TableCell className="text-foreground">
-                  {reg.lotHasKit ? (reg.shirtSize ?? "-") : "-"}
+                  {reg.shirtSize ?? "-"}
                 </TableCell>
                 <TableCell>{getRegistrationStatusBadge(reg.status)}</TableCell>
               </TableRow>

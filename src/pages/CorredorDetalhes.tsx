@@ -200,6 +200,10 @@ const CorredorDetalhes = () => {
                 <p className="text-sm text-foreground">{corredor.modality}</p>
               </div>
               <div className="pt-4">
+                <p className="text-xs text-muted-foreground mb-1">Tamanho da camiseta</p>
+                <p className="text-sm text-foreground">{corredor.shirtSize}</p>
+              </div>
+              <div className="pt-4">
                 <p className="text-xs text-muted-foreground mb-1">Último acesso</p>
                 <p className="text-sm text-foreground">{corredor.lastAccess}</p>
               </div>

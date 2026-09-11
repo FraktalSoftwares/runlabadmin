@@ -42,6 +42,7 @@ export type CorredorDetails = {
   state: string;
   gender: string;
   modality: string;
+  shirtSize: string;
   lastAccess: string;
   tier: CorredorTier;
   plan: string;
@@ -121,7 +122,7 @@ export function useCorredorDetails(id: string | undefined) {
     try {
       const { data: row, error: viewError } = await supabase
         .from("v_corredores_admin")
-        .select("id, full_name, email, phone, birth_date, gender, preferred_distance, avatar_url, tipo_user, updated_at, credit_balance, city, state, total_xp, is_partner")
+        .select("id, full_name, email, phone, birth_date, gender, preferred_distance, shirt_size, avatar_url, tipo_user, updated_at, credit_balance, city, state, total_xp, is_partner")
         .eq("id", id)
         .single();
 
@@ -197,6 +198,7 @@ export function useCorredorDetails(id: string | undefined) {
         state: ((row.state as string | null)?.trim()) || "—",
         gender: (row.gender as string) ?? "—",
         modality: preferredToModality(row.preferred_distance as string | null),
+        shirtSize: ((row.shirt_size as string | null)?.trim()) || "—",
         lastAccess: formatLastAccess(row.updated_at as string | null),
         tier: {
           slug: tierDef.slug,

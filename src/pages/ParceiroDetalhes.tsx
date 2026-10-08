@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { CorredorProfileDialog } from "@/components/CorredorProfileDialog";
 import { InativarParceiroDialog } from "@/components/InativarParceiroDialog";
 import { EditarCupomParceiroDialog } from "@/components/EditarCupomParceiroDialog";
+import { ExcluirContaButton } from "@/components/ExcluirContaButton";
 import { toast } from "sonner";
 import { useParceiroDetails } from "@/hooks/useParceiroDetails";
 import { supabase } from "@/lib/supabase";
@@ -65,16 +66,27 @@ const ParceiroDetalhes = () => {
       
       <main className="container mx-auto px-6 py-8 pt-24">
         {/* Back Button */}
-        <div className="mt-16 mb-6">
+        <div className="mt-16 mb-6 flex items-center justify-between gap-4">
           <Link to="/parceiros">
-            <Button 
-              className="gap-2 border-0 hover:brightness-90 transition-all" 
+            <Button
+              className="gap-2 border-0 hover:brightness-90 transition-all"
               style={{ backgroundColor: '#1A1A1A', color: '#CCF725' }}
             >
               <ChevronLeft className="w-5 h-5" />
               Voltar
             </Button>
           </Link>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setIsInativarDialogOpen(true)}
+              className="gap-2 border-0 hover:brightness-90 transition-all"
+              style={{ backgroundColor: '#1A1A1A', color: '#808080' }}
+            >
+              <X className="w-4 h-4" />
+              Inativar parceiro
+            </Button>
+            <ExcluirContaButton userId={parceiro.id} userName={parceiro.name} redirectTo="/parceiros" />
+          </div>
         </div>
 
         {/* Breadcrumb */}
@@ -240,16 +252,6 @@ const ParceiroDetalhes = () => {
 
         {/* Form Data Card */}
         <div className="mb-6">
-          <div className="flex justify-end mb-4">
-            <Button
-              onClick={() => setIsInativarDialogOpen(true)}
-              className="gap-2 border-0 hover:brightness-90 transition-all"
-              style={{ backgroundColor: '#1A1A1A', color: '#808080' }}
-            >
-              <X className="w-4 h-4" />
-              Inativar parceiro
-            </Button>
-          </div>
           <h2 className="text-xl font-semibold text-foreground mb-4">Dados do formulário enviado</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Left Card */}

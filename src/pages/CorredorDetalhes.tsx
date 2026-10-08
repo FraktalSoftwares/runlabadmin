@@ -6,6 +6,7 @@ import { ChevronRight, ChevronLeft, Loader2, Ticket, ExternalLink } from "lucide
 import nivelIcon from "@/assets/nivel-icon.png";
 import { Button } from "@/components/ui/button";
 import { useCorredorDetails } from "@/hooks/useCorredorDetails";
+import { ExcluirContaButton } from "@/components/ExcluirContaButton";
 
 function formatPrice(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
@@ -87,13 +88,14 @@ const CorredorDetalhes = () => {
       <Header />
 
       <main className="container mx-auto px-6 py-8 pt-24">
-        <div className="mt-16 mb-6">
+        <div className="mt-16 mb-6 flex items-center justify-between gap-4">
           <Link to="/corredores">
             <Button className="gap-2 border-0 hover:brightness-90 transition-all" style={{ backgroundColor: "#1A1A1A", color: "#CCF725" }}>
               <ChevronLeft className="w-5 h-5" />
               Voltar
             </Button>
           </Link>
+          <ExcluirContaButton userId={corredor.id} userName={corredor.name} redirectTo="/corredores" />
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">

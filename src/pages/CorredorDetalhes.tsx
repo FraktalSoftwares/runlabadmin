@@ -7,6 +7,7 @@ import nivelIcon from "@/assets/nivel-icon.png";
 import { Button } from "@/components/ui/button";
 import { useCorredorDetails } from "@/hooks/useCorredorDetails";
 import { ExcluirContaButton } from "@/components/ExcluirContaButton";
+import { AdicionarCreditosButton } from "@/components/AdicionarCreditosButton";
 
 function formatPrice(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
@@ -47,7 +48,7 @@ const CREDIT_TYPE_LABELS: Record<string, string> = {
 
 const CorredorDetalhes = () => {
   const { id } = useParams();
-  const { data: corredor, loading, error } = useCorredorDetails(id);
+  const { data: corredor, loading, error, refetch } = useCorredorDetails(id);
 
   if (loading) {
     return (
@@ -215,7 +216,10 @@ const CorredorDetalhes = () => {
 
         {/* Saldo de Créditos */}
         <div className="mb-6">
-          <h2 className="text-xl font-semibold text-foreground mb-4">Saldo de créditos</h2>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-xl font-semibold text-foreground">Saldo de créditos</h2>
+            <AdicionarCreditosButton userId={corredor.id} userName={corredor.name} onGranted={refetch} />
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="bg-[#2a2a2a] border-0">
               <CardContent className="p-6">

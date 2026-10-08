@@ -33,6 +33,8 @@ export type CorredorRow = {
 };
 
 const PAGE_SIZE_DEFAULT = 10;
+/** Limite de linhas por requisição do PostgREST (max_rows do Supabase) */
+const SUPABASE_MAX_ROWS = 1000;
 
 function formatLastAccess(updatedAt: string | null): string {
   if (!updatedAt) return "—";
@@ -66,12 +68,20 @@ async function fetchCorredores(
   let userIdsParticipacao: string[] | null = null;
   let userIdsExcluirParaZero: string[] | null = null;
   if (filters.participacaoMin != null) {
-    const { data: regs } = await supabase
-      .from("competition_registrations")
-      .select("user_id")
-      .neq("status", "cancelled");
+    const regs: { user_id: string }[] = [];
+    for (let from = 0; ; from += SUPABASE_MAX_ROWS) {
+      const { data: batch, error: regsError } = await supabase
+        .from("competition_registrations")
+        .select("user_id")
+        .neq("status", "cancelled")
+        .order("id", { ascending: true })
+        .range(from, from + SUPABASE_MAX_ROWS - 1);
+      if (regsError) throw regsError;
+      regs.push(...(batch ?? []));
+      if (!batch || batch.length < SUPABASE_MAX_ROWS) break;
+    }
     const countByUser: Record<string, number> = {};
-    (regs ?? []).forEach((r) => {
+    regs.forEach((r) => {
       countByUser[r.user_id] = (countByUser[r.user_id] ?? 0) + 1;
     });
     if (filters.participacaoMin === 0) {
@@ -89,7 +99,8 @@ async function fetchCorredores(
   let query = supabase
     .from("v_corredores_admin")
     .select(selectFields, { count: "exact" })
-    .order("full_name", { ascending: true });
+    .order("full_name", { ascending: true })
+    .order("id", { ascending: true });
 
   const search = filters.search?.trim();
   if (search) {
@@ -208,6 +219,11 @@ export function useCorredores(
 
 /** Busca todos os corredores com filtros (para exportação CSV) */
 export async function fetchCorredoresForExport(filters: CorredorFilters): Promise<CorredorRow[]> {
-  const result = await fetchCorredores(filters, 1, 10000);
-  return result.data;
+  const rows: CorredorRow[] = [];
+  for (let page = 1; ; page++) {
+    const result = await fetchCorredores(filters, page, SUPABASE_MAX_ROWS);
+    rows.push(...result.data);
+    if (result.data.length < SUPABASE_MAX_ROWS || rows.length >= result.total) break;
+  }
+  return rows;
 }

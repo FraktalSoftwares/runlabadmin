@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useCorredorDetails } from "@/hooks/useCorredorDetails";
 import { ExcluirContaButton } from "@/components/ExcluirContaButton";
 import { AdicionarCreditosButton } from "@/components/AdicionarCreditosButton";
+import { LancarCorridaButton } from "@/components/LancarCorridaButton";
 
 function formatPrice(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
@@ -96,7 +97,10 @@ const CorredorDetalhes = () => {
               Voltar
             </Button>
           </Link>
-          <ExcluirContaButton userId={corredor.id} userName={corredor.name} redirectTo="/corredores" />
+          <div className="flex items-center gap-2">
+            <LancarCorridaButton userId={corredor.id} userName={corredor.name} onCreated={refetch} />
+            <ExcluirContaButton userId={corredor.id} userName={corredor.name} redirectTo="/corredores" />
+          </div>
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">

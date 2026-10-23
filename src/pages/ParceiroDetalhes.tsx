@@ -3,10 +3,10 @@ import { Header } from "@/components/Header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useParams, Link } from "react-router-dom";
-import { ChevronRight, X, ChevronLeft, Loader2, Pencil } from "lucide-react";
+import { ChevronRight, X, ChevronLeft, Loader2, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CorredorProfileDialog } from "@/components/CorredorProfileDialog";
-import { InativarParceiroDialog } from "@/components/InativarParceiroDialog";
+import { StatusParceiroDialog } from "@/components/StatusParceiroDialog";
 import { EditarCupomParceiroDialog } from "@/components/EditarCupomParceiroDialog";
 import { ExcluirContaButton } from "@/components/ExcluirContaButton";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ const ParceiroDetalhes = () => {
   const { id } = useParams();
   const { data: parceiro, loading, error, refetch } = useParceiroDetails(id);
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
-  const [isInativarDialogOpen, setIsInativarDialogOpen] = useState(false);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [isCupomDialogOpen, setIsCupomDialogOpen] = useState(false);
 
   if (loading) {
@@ -50,6 +50,7 @@ const ParceiroDetalhes = () => {
     );
   }
 
+  const isActive = parceiro.status === "Ativo";
   const repasses = parceiro.repasses;
   const comissoes = parceiro.comissoes;
 
@@ -78,12 +79,12 @@ const ParceiroDetalhes = () => {
           </Link>
           <div className="flex items-center gap-2">
             <Button
-              onClick={() => setIsInativarDialogOpen(true)}
+              onClick={() => setIsStatusDialogOpen(true)}
               className="gap-2 border-0 hover:brightness-90 transition-all"
-              style={{ backgroundColor: '#1A1A1A', color: '#808080' }}
+              style={{ backgroundColor: '#1A1A1A', color: isActive ? '#808080' : '#CCF725' }}
             >
-              <X className="w-4 h-4" />
-              Inativar parceiro
+              {isActive ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+              {isActive ? "Inativar parceiro" : "Ativar parceiro"}
             </Button>
             <ExcluirContaButton userId={parceiro.id} userName={parceiro.name} redirectTo="/parceiros" />
           </div>
@@ -426,24 +427,30 @@ const ParceiroDetalhes = () => {
         }}
       />
 
-      {/* Inativar Parceiro Dialog */}
-      <InativarParceiroDialog
-        open={isInativarDialogOpen}
-        onOpenChange={setIsInativarDialogOpen}
+      {/* Ativar / Inativar Parceiro Dialog */}
+      <StatusParceiroDialog
+        open={isStatusDialogOpen}
+        onOpenChange={setIsStatusDialogOpen}
+        isActive={isActive}
         parceiroNome={parceiro.name}
         onConfirm={async () => {
+          const acao = isActive ? "inativar" : "ativar";
           try {
-            const { error: inactivateError } = await supabase.rpc("set_partner_active", {
+            const { error: statusError } = await supabase.rpc("set_partner_active", {
               p_user_id: parceiro.id,
-              p_active: false,
+              p_active: !isActive,
             });
-            if (inactivateError) throw inactivateError;
+            if (statusError) throw new Error(statusError.message);
 
-            toast.success("Parceiro inativado", { description: `${parceiro.name} foi inativado com sucesso.` });
-            setIsInativarDialogOpen(false);
+            toast.success(isActive ? "Parceiro inativado" : "Parceiro ativado", {
+              description: `${parceiro.name} foi ${isActive ? "inativado" : "ativado"} com sucesso.`,
+            });
+            setIsStatusDialogOpen(false);
             await refetch();
           } catch (e) {
-            toast.error("Erro ao inativar", { description: e instanceof Error ? e.message : "Não foi possível inativar o parceiro." });
+            toast.error(`Erro ao ${acao}`, {
+              description: e instanceof Error ? e.message : `Não foi possível ${acao} o parceiro.`,
+            });
           }
         }}
       />

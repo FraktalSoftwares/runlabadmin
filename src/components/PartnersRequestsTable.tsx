@@ -26,27 +26,15 @@ export const PartnersRequestsTable = () => {
   const handleConfirmAccept = async (dataInicio?: Date, dataFim?: Date) => {
     if (!selectedPartner) return;
     try {
-      const now = new Date().toISOString();
-      const updatePayload: Record<string, unknown> = {
-        status: "approved",
-        updated_at: now,
-        valid_from: dataInicio ? dataInicio.toISOString() : now,
-        valid_until: dataFim ? dataFim.toISOString() : null,
-      };
+      // Perfil e solicitação na mesma transação: aprovar em dois passos deixava
+      // a parceria aprovada com o perfil ainda como Corredor.
+      const { error } = await supabase.rpc("admin_approve_partnership", {
+        p_request_id: selectedPartner.id,
+        p_valid_from: dataInicio ? dataInicio.toISOString() : null,
+        p_valid_until: dataFim ? dataFim.toISOString() : null,
+      });
 
-      const { error: errRequest } = await supabase
-        .from("partnership_requests")
-        .update(updatePayload)
-        .eq("id", selectedPartner.id);
-
-      if (errRequest) throw errRequest;
-
-      const { error: errProfile } = await supabase
-        .from("profiles")
-        .update({ tipo_user: "Parceiro", is_partner: true, updated_at: now })
-        .eq("id", selectedPartner.user_id);
-
-      if (errProfile) throw errProfile;
+      if (error) throw new Error(error.message);
 
       toast.success(`Solicitação de ${selectedPartner.name} aceita com sucesso!`);
       setIsAceitarDialogOpen(false);

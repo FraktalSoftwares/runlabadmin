@@ -9,6 +9,7 @@ import { useCorredorDetails } from "@/hooks/useCorredorDetails";
 import { ExcluirContaButton } from "@/components/ExcluirContaButton";
 import { AdicionarCreditosButton } from "@/components/AdicionarCreditosButton";
 import { LancarCorridaButton } from "@/components/LancarCorridaButton";
+import { RemoverCreditosButton } from "@/components/RemoverCreditosButton";
 
 function formatPrice(value: number): string {
   return `R$ ${value.toFixed(2).replace(".", ",")}`;
@@ -222,7 +223,15 @@ const CorredorDetalhes = () => {
         <div className="mb-6">
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-xl font-semibold text-foreground">Saldo de créditos</h2>
-            <AdicionarCreditosButton userId={corredor.id} userName={corredor.name} onGranted={refetch} />
+            <div className="flex items-center gap-2">
+              <RemoverCreditosButton
+                userId={corredor.id}
+                userName={corredor.name}
+                balance={corredor.creditBalance}
+                onRemoved={refetch}
+              />
+              <AdicionarCreditosButton userId={corredor.id} userName={corredor.name} onGranted={refetch} />
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="bg-[#2a2a2a] border-0">

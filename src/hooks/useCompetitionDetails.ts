@@ -683,7 +683,13 @@ export function useCompetitionRanking(
         .order("rank", { ascending: true })
         .range(from, to);
 
-      if (runsError) throw runsError;
+      if (runsError) {
+        throw new Error(
+          runsError.code === "57014"
+            ? "O ranking demorou demais para carregar (tempo limite do banco). Tente novamente em instantes."
+            : `Erro ao carregar ranking: ${runsError.message}`
+        );
+      }
       setTotal(count || 0);
 
       if (!runs || runs.length === 0) {
@@ -721,7 +727,13 @@ export function useCompetitionRanking(
     fetchRanking();
   }, [fetchRanking]);
 
-  useRealtimeRefetch(["user_runs", "user_run_events"], fetchRanking);
+  // Só corridas desta competição, no máximo um refetch a cada 10s. Escutar
+  // user_run_events disparava a view pesada a cada ponto de GPS de qualquer
+  // corredor e estourava o statement_timeout durante as etapas.
+  useRealtimeRefetch(["user_runs"], fetchRanking, {
+    filter: competitionId ? `competition_id=eq.${competitionId}` : undefined,
+    throttleMs: 10_000,
+  });
 
   return { data, total, loading, error, refetch: fetchRanking };
 }

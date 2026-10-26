@@ -42,6 +42,16 @@ export function useRealtimeInvalidation(
   }, [tables.join(","), JSON.stringify(queryKeys)]);
 }
 
+type RealtimeRefetchOptions = {
+  /** Filtro do postgres_changes, ex.: "competition_id=eq.<uuid>". */
+  filter?: string;
+  /**
+   * Agrupa eventos em rajada: no máximo um refetch a cada N ms. Use em
+   * consultas pesadas ligadas a tabelas de escrita frequente.
+   */
+  throttleMs?: number;
+};
+
 /**
  * Escuta mudanças em tempo real de uma ou mais tabelas do Supabase
  * e chama uma callback de refetch. Para hooks que usam useState/useEffect.
@@ -49,12 +59,27 @@ export function useRealtimeInvalidation(
 export function useRealtimeRefetch(
   tables: string[],
   refetch: () => void,
+  options: RealtimeRefetchOptions = {},
 ) {
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
+  const { filter, throttleMs } = options;
 
   useEffect(() => {
     if (tables.length === 0) return;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const trigger = () => {
+      if (!throttleMs) {
+        refetchRef.current();
+        return;
+      }
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        refetchRef.current();
+      }, throttleMs);
+    };
 
     const channelName = `realtime-refetch-${tables.join("-")}-${Date.now()}`;
     const channel = supabase.channel(channelName);
@@ -62,17 +87,16 @@ export function useRealtimeRefetch(
     tables.forEach((table) => {
       channel.on(
         "postgres_changes",
-        { event: "*", schema: "public", table },
-        () => {
-          refetchRef.current();
-        },
+        { event: "*", schema: "public", table, ...(filter ? { filter } : {}) },
+        trigger,
       );
     });
 
     channel.subscribe();
 
     return () => {
+      if (timer) clearTimeout(timer);
       channel.unsubscribe();
     };
-  }, [tables.join(",")]);
+  }, [tables.join(","), filter, throttleMs]);
 }

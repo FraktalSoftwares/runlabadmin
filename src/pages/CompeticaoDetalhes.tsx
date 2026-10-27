@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Header } from "@/components/Header";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { usePermissions } from "@/hooks/usePermissions";
-import { ChevronLeft, ChevronRight, Pencil, Download, Filter, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Download, Filter, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -452,15 +453,27 @@ const InscricoesTab = ({
 const RankingTab = ({ competitionId }: { competitionId: string }) => {
   const [page, setPage] = useState(1);
   const [source, setSource] = useState<"public" | "audit">("public");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const pageSize = 10;
   const { data, total, loading, error, refetch } = useCompetitionRanking(
     competitionId,
     page,
     pageSize,
-    source
+    source,
+    debouncedSearch
   );
 
-  if (loading && data.length === 0) return <LoadingState />;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Com busca ativa o campo precisa continuar montado durante o carregamento.
+  if (loading && data.length === 0 && !debouncedSearch) return <LoadingState />;
   if (error) return <ErrorState message={error.message} onRetry={refetch} />;
 
   return (
@@ -500,10 +513,30 @@ const RankingTab = ({ competitionId }: { competitionId: string }) => {
                 : "Inclui todos que tentaram correr e mostra por que podem não aparecer no app."}
             </p>
           </div>
-          <p className="text-sm text-muted-foreground">{total} resultado{total !== 1 ? "s" : ""}</p>
+          <div className="flex flex-col items-end gap-2">
+            <div className="relative w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome ou e-mail"
+                className="pl-10 bg-input border-border text-foreground"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+              {total} resultado{total !== 1 ? "s" : ""}
+            </p>
+          </div>
         </div>
         {data.length === 0 ? (
-          <EmptyState message="Nenhum resultado no ranking ainda." />
+          <EmptyState
+            message={
+              debouncedSearch
+                ? "Nenhum corredor encontrado no ranking para essa busca."
+                : "Nenhum resultado no ranking ainda."
+            }
+          />
         ) : (
           <Table>
             <TableHeader>

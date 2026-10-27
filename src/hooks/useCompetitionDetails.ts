@@ -647,7 +647,8 @@ export function useCompetitionRanking(
   competitionId: string | undefined,
   page: number = 1,
   pageSize: number = 10,
-  source: RankingSource = "public"
+  source: RankingSource = "public",
+  search: string = ""
 ) {
   const [data, setData] = useState<RankingRow[]>([]);
   const [total, setTotal] = useState(0);
@@ -663,6 +664,28 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
+      // As views do ranking não têm e-mail: busca os perfis por nome/e-mail e
+      // filtra o ranking pelos ids encontrados. A posição continua a original.
+      // Vírgula e parênteses quebram a sintaxe do .or() do PostgREST.
+      const term = search.trim().replace(/[,()]/g, " ");
+      let userIds: string[] | null = null;
+      if (term) {
+        const { data: profiles, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id")
+          .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
+          .limit(500);
+        if (profilesError) {
+          throw new Error(`Erro ao buscar corredor: ${profilesError.message}`);
+        }
+        userIds = (profiles ?? []).map((p) => p.id);
+        if (userIds.length === 0) {
+          setTotal(0);
+          setData([]);
+          return;
+        }
+      }
+
       const table =
         source === "public"
           ? "v_competition_leaderboard"
@@ -671,14 +694,16 @@ export function useCompetitionRanking(
         source === "public"
           ? "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state, current_distance_meters"
           : "run_id, user_id, distance_meters, avg_pace_seconds_per_km, total_time_seconds, rank, user_name, user_avatar_url, state, current_distance_meters, public_visibility, hidden_reason, raw_total_time_seconds";
+      let query = supabase
+        .from(table)
+        .select(selectColumns, { count: "exact" })
+        .eq("competition_id", competitionId);
+      if (userIds) query = query.in("user_id", userIds);
       const {
         data: runs,
         error: runsError,
         count,
-      } = await supabase
-        .from(table)
-        .select(selectColumns, { count: "exact" })
-        .eq("competition_id", competitionId)
+      } = await query
         .order("distance_meters", { ascending: true })
         .order("rank", { ascending: true })
         .range(from, to);
@@ -721,7 +746,7 @@ export function useCompetitionRanking(
     } finally {
       setLoading(false);
     }
-  }, [competitionId, page, pageSize, source]);
+  }, [competitionId, page, pageSize, source, search]);
 
   useEffect(() => {
     fetchRanking();

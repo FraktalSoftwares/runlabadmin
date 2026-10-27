@@ -664,14 +664,15 @@ export function useCompetitionRanking(
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      // As views do ranking não têm e-mail: busca os perfis por nome/e-mail e
+      // As views do ranking não têm e-mail: busca os corredores por nome/e-mail e
       // filtra o ranking pelos ids encontrados. A posição continua a original.
       // Vírgula e parênteses quebram a sintaxe do .or() do PostgREST.
       const term = search.trim().replace(/[,()]/g, " ");
       let userIds: string[] | null = null;
       if (term) {
+        // profiles não tem e-mail; a view do admin junta com auth.users.
         const { data: profiles, error: profilesError } = await supabase
-          .from("profiles")
+          .from("v_corredores_admin")
           .select("id")
           .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
           .limit(500);
